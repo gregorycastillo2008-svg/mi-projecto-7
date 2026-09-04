@@ -146,7 +146,7 @@ struct FBodycamCameraSettings
 	// ---- Post proceso -------------------------------------------------------
 	/** Viñeta: es radial de verdad, oscurece SOLO las esquinas. */
 	UPROPERTY(EditAnywhere, Category = "Bodycam|PostProcess", meta = (ClampMin = 0, ClampMax = 2))
-	float Vignette = 0.0f;              // borde bodycam ligero, vision frontal limpia
+	float Vignette = 0.22f;             // borde bodycam visible, sin cerrar la vision frontal
 	/** Aberracion cromatica en la periferia. Util 0-1.5; por encima pinta arcoiris. */
 	UPROPERTY(EditAnywhere, Category = "Bodycam|PostProcess", meta = (ClampMin = 0, ClampMax = 1.5))
 	float ChromaticAberration = 0.10f;   // franja de color en la periferia
@@ -170,7 +170,7 @@ struct FBodycamCameraSettings
 	float LensDirtIntensity = 0.012f;
 	/** Saturacion contenida de una bodycam profesional. 1.15 = +15% de color. */
 	UPROPERTY(EditAnywhere, Category = "Bodycam|PostProcess", meta = (ClampMin = 0, ClampMax = 2))
-	float Saturation = 1.0f;            // color mas legible, todavia tactico y natural
+	float Saturation = 1.4f;            // +40% de color: evita el aspecto gris/blanco y negro
 
 	/** Contraste global. 1 = sin tocar; por encima separa mas luces y sombras. */
 	UPROPERTY(EditAnywhere, Category = "Bodycam|PostProcess", meta = (ClampMin = 0.5, ClampMax = 2))

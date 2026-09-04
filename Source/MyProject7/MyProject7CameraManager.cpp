@@ -422,7 +422,10 @@ void AMyProject7CameraManager::ApplyBodycam(FTViewTarget& OutVT, float DeltaTime
 
 		// Vineta nativa muy ligera: solo define las esquinas, sin cerrar la imagen.
 		PP.bOverride_VignetteIntensity = true;
-		PP.VignetteIntensity = FMath::Clamp(Bodycam.Vignette * 0.55f, 0.0f, 1.0f);
+		// El look bodycam conserva un borde oscuro moderado, incluso si un valor
+		// antiguo del Blueprint quedo en cero.
+		const float AppliedVignette = FMath::Max(Bodycam.Vignette, 0.22f);
+		PP.VignetteIntensity = FMath::Clamp(AppliedVignette * 0.55f, 0.0f, 1.0f);
 
 		// Aberracion cromatica: SOLO en la periferia. StartOffset alto = el centro
 		// (mira, arma, enemigos de frente) queda limpio y sin franjas de color.
@@ -452,7 +455,10 @@ void AMyProject7CameraManager::ApplyBodycam(FTViewTarget& OutVT, float DeltaTime
 		PP.bOverride_FilmGrainIntensity = true;
 		PP.FilmGrainIntensity = Bodycam.FilmGrain;
 		PP.bOverride_ColorSaturation = true;
-		PP.ColorSaturation = FVector4(Bodycam.Saturation, Bodycam.Saturation, Bodycam.Saturation, 1.0f);
+		// 1.0 es neutro. Nunca permitir el 0.5 heredado que hacia que el juego
+		// pareciera blanco y negro; 1.4 conserva color real sin sobresaturarlo.
+		const float AppliedSaturation = FMath::Clamp(FMath::Max(Bodycam.Saturation, 1.4f), 0.0f, 2.0f);
+		PP.ColorSaturation = FVector4(AppliedSaturation, AppliedSaturation, AppliedSaturation, 1.0f);
 		// Ajustable al instante desde la consola del juego, sin volver a abrir
 		// el editor ni tocar el resto de ajustes de la bodycam.
 		{
@@ -461,9 +467,10 @@ void AMyProject7CameraManager::ApplyBodycam(FTViewTarget& OutVT, float DeltaTime
 			{
 				TArray<FString> P;
 				Color.ParseIntoArrayWS(P);
-				if (P.Num() >= 1) { Bodycam.Saturation = FMath::Clamp(FCString::Atof(*P[0]), 0.0f, 2.0f); }
+				if (P.Num() >= 1) { Bodycam.Saturation = FMath::Clamp(FCString::Atof(*P[0]), 1.4f, 2.0f); }
 				if (P.Num() >= 2) { Bodycam.Contrast = FMath::Clamp(FCString::Atof(*P[1]), 0.5f, 2.0f); }
-				PP.ColorSaturation = FVector4(Bodycam.Saturation, Bodycam.Saturation, Bodycam.Saturation, 1.0f);
+				const float ConsoleSaturation = FMath::Clamp(FMath::Max(Bodycam.Saturation, 1.4f), 0.0f, 2.0f);
+				PP.ColorSaturation = FVector4(ConsoleSaturation, ConsoleSaturation, ConsoleSaturation, 1.0f);
 			}
 		}
 
@@ -496,7 +503,7 @@ void AMyProject7CameraManager::ApplyBodycam(FTViewTarget& OutVT, float DeltaTime
 				Bodycam.LensDistortionStrength * LensScale);
 			BodycamLensMID->SetScalarParameterValue(TEXT("EdgeStart"), Bodycam.LensEdgeStart);
 			BodycamLensMID->SetScalarParameterValue(TEXT("EdgeEnd"), Bodycam.LensEdgeEnd);
-			BodycamLensMID->SetScalarParameterValue(TEXT("VignetteIntensity"), Bodycam.Vignette);
+			BodycamLensMID->SetScalarParameterValue(TEXT("VignetteIntensity"), AppliedVignette);
 			PP.AddBlendable(BodycamLensMID, 1.0f);
 		}
 
