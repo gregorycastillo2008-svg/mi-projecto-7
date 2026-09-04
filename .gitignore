@@ -1,0 +1,17 @@
+# Unreal Engine - carpetas regenerables, no se versionan
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+.vs/
+*.VC.db
+*.VC.VC.opendb
+
+# Archivos temporales del sistema/editor
+.idea/
+*.tmp
+*.log
+
+# Solo en subcarpetas de plugins, si las hubiera
+Plugins/*/Binaries/
+Plugins/*/Intermediate/

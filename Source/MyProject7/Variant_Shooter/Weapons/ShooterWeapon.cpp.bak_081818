@@ -1,0 +1,1152 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+
+#include "ShooterWeapon.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "Engine/World.h"
+#include "ShooterProjectile.h"
+#include "ShooterWeaponHolder.h"
+#include "Components/SceneComponent.h"
+#include "TimerManager.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimSequenceBase.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+#include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInterface.h"
+#include "Engine/StaticMesh.h"
+#include "UObject/ConstructorHelpers.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/Pawn.h"
+#include "Engine/SkeletalMesh.h"
+#include "ReferenceSkeleton.h"
+#include "MyProject7Character.h"
+#include "DrawDebugHelpers.h"
+
+// Encaje del arma en la mano, en vivo y sin recompilar:
+//     arma.fit <escala> <X> <Y> <Z> [pitch] [yaw] [roll]
+// Ejemplo:  arma.fit 1 4 -6 -5      /  arma.fit 1 4 -6 -5 0 -90 0
+// Pose del arma AL APUNTAR, en vivo:
+//     arma.ads <X> <Y> <Z> [pitch] [yaw] [roll]
+// X negativo = mas a la izquierda (hacia el centro de la pantalla).
+// Marca en pantalla el punto que el codigo considera la BOCA del cañon.
+//     arma.debugboca 1
+// Esfera roja = boca calculada. Linea verde = direccion del disparo.
+// Deja el APUNTADO fijo sin tener que mantener el clic derecho, para poder
+// calibrar con la consola:  arma.adsfijo 1   /   arma.adsfijo 0
+// Ultimo valor consumido POR CADA ARMA. Antes era un unico  static FString
+// Ultimo  compartido: la primera arma que ticaba se comia el comando y las
+// demas lo ignoraban, asi que escribir en consola no hacia nada en el arma
+// que llevabas en la mano.
+static TMap<const AShooterWeapon*, FString> GUltimoFit;
+static TMap<const AShooterWeapon*, FString> GUltimoADS;
+static TMap<const AShooterWeapon*, FString> GUltimoHuesos;
+static TMap<const AShooterWeapon*, FString> GUltimoYaw;
+static TMap<const AShooterWeapon*, FString> GUltimoBoca;
+
+// Oculta huesos del arma equipada, separados por comas. Al ocultar un hueso
+// desaparecen los vertices pegados a el: sirve para quitar miras, asas o
+// accesorios que vienen dentro de la misma malla.
+//     arma.ocultarhueso weapon_scar17s_handle
+//     arma.ocultarhueso            (vacio = mostrar todo otra vez)
+static TAutoConsoleVariable<FString> CVarOcultarHueso(
+	TEXT("arma.ocultarhueso"),
+	TEXT(""),
+	TEXT("Oculta huesos del arma (separados por comas). Vacio = restaurar."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<int32> CVarADSFijo(
+	TEXT("arma.adsfijo"),
+	0,
+	TEXT("1 = el arma se queda apuntando sin mantener el boton. Para calibrar."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<int32> CVarDebugBoca(
+	TEXT("arma.debugboca"),
+	0,
+	TEXT("1 = dibuja una esfera en la boca del cañon y la linea de tiro."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<FString> CVarArmaADS(
+	TEXT("arma.ads"),
+	TEXT(""),
+	TEXT("Pose del arma al apuntar: <X> <Y> <Z> [pitch] [yaw] [roll]"),
+	ECVF_Default);
+
+static TAutoConsoleVariable<FString> CVarArmaFit(
+	TEXT("arma.fit"),
+	TEXT(""),
+	TEXT("Coloca la malla del arma: <escala> <X> <Y> <Z> [pitch] [yaw] [roll]"),
+	ECVF_Default);
+
+// Gira SOLO el arma que llevas en la mano sobre su eje vertical: la culata se
+// va a un lado y la boca al otro. Numero en grados; positivo o negativo segun
+// el lado. A diferencia de arma.fit, NO reescribe las armas guardadas.
+//     arma.yaw 4      arma.yaw -3      arma.yaw 0   (recto de nuevo)
+static TAutoConsoleVariable<FString> CVarArmaYaw(
+	TEXT("arma.yaw"),
+	TEXT(""),
+	TEXT("Gira el arma equipada sobre su eje vertical: <grados>"),
+	ECVF_Default);
+
+// Mueve el PUNTO por donde salen bala y trazadora, en ejes LOCALES de la malla
+// del arma que llevas: X lateral, Y a lo largo del canion, Z altura. Bajar Z
+// deja el disparo mas pegado a la mano. Solo afecta al arma equipada.
+//     arma.boca -6 56 7        arma.boca 0 0 0   (vuelve al calculo automatico)
+static TAutoConsoleVariable<FString> CVarArmaBoca(
+	TEXT("arma.boca"),
+	TEXT(""),
+	TEXT("Punto de salida de la bala en el arma equipada: <X> <Y> <Z> (ejes de la malla)"),
+	ECVF_Default);
+
+AShooterWeapon::AShooterWeapon()
+{
+	PrimaryActorTick.bCanEverTick = true;
+
+	// create the root
+	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+
+	// create the first person mesh
+	FirstPersonMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("First Person Mesh"));
+	FirstPersonMesh->SetupAttachment(RootComponent);
+
+	// ---- Laser -------------------------------------------------------------
+	// Cilindro y esfera del motor, con los materiales rojos del pack bodycam.
+	// Van en coordenadas ABSOLUTAS: el haz se estira entre dos puntos de mundo,
+	// asi que no debe heredar la transformacion del arma.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> BeamMat(TEXT("/Game/BODYCAM_VFX/M_LaserBeam"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> DotMat(TEXT("/Game/BODYCAM_VFX/M_LaserDot"));
+
+	LaserDot = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Laser Dot"));
+	LaserDot->SetupAttachment(RootComponent);
+	LaserDot->SetCollisionProfileName(FName("NoCollision"));
+	LaserDot->SetCastShadow(false);
+	LaserDot->SetUsingAbsoluteLocation(true);
+	LaserDot->SetUsingAbsoluteRotation(true);
+	LaserDot->SetUsingAbsoluteScale(true);
+	LaserDot->SetVisibility(false);
+	if (SphMesh.Succeeded()) { LaserDot->SetStaticMesh(SphMesh.Object); }
+	if (DotMat.Succeeded())  { LaserDot->SetMaterial(0, DotMat.Object); }
+
+	LaserBeam = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Laser Beam"));
+	LaserBeam->SetupAttachment(RootComponent);
+	LaserBeam->SetCollisionProfileName(FName("NoCollision"));
+	LaserBeam->SetCastShadow(false);
+	LaserBeam->SetUsingAbsoluteLocation(true);
+	LaserBeam->SetUsingAbsoluteRotation(true);
+	LaserBeam->SetUsingAbsoluteScale(true);
+	LaserBeam->SetVisibility(false);
+	if (CylMesh.Succeeded()) { LaserBeam->SetStaticMesh(CylMesh.Object); }
+	if (BeamMat.Succeeded()) { LaserBeam->SetMaterial(0, BeamMat.Object); }
+
+	FirstPersonMesh->SetCollisionProfileName(FName("NoCollision"));
+	FirstPersonMesh->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::FirstPerson);
+	FirstPersonMesh->bOnlyOwnerSee = true;
+
+	// create the third person mesh
+	ThirdPersonMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Third Person Mesh"));
+	ThirdPersonMesh->SetupAttachment(RootComponent);
+
+	ThirdPersonMesh->SetCollisionProfileName(FName("NoCollision"));
+	ThirdPersonMesh->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::WorldSpaceRepresentation);
+	ThirdPersonMesh->bOwnerNoSee = true;
+
+	static ConstructorHelpers::FObjectFinder<UAnimMontage> DefaultReloadMontage(
+		TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Reload.MM_Rifle_Reload"));
+	if (DefaultReloadMontage.Succeeded()) { ReloadMontage = DefaultReloadMontage.Object; }
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> DefaultReloadSound(
+		TEXT("/Game/Audio/weapon_reload.weapon_reload"));
+	if (DefaultReloadSound.Succeeded()) { ReloadSound = DefaultReloadSound.Object; }
+}
+
+void AShooterWeapon::BeginPlay()
+{
+	// MIRA DEL SCAR. Viene dentro de la misma malla, con un solo slot de
+	// material, asi que no se puede quitar por material. Lo unico que funciona
+	// es ocultar el hueso al que estan pegados sus vertices.
+	// Se puede afinar en vivo con:  arma.ocultarhueso <nombre>
+	if (FirstPersonMesh && !HiddenBonesOnEquip.IsEmpty())
+	{
+		TArray<FString> Nombres;
+		HiddenBonesOnEquip.ParseIntoArray(Nombres, TEXT(","), true);
+		for (FString& N : Nombres)
+		{
+			N.TrimStartAndEndInline();
+			const FName Hueso(*N);
+			if (FirstPersonMesh->GetBoneIndex(Hueso) != INDEX_NONE)
+			{
+				FirstPersonMesh->HideBoneByName(Hueso, EPhysBodyOp::PBO_None);
+				if (ThirdPersonMesh) { ThirdPersonMesh->HideBoneByName(Hueso, EPhysBodyOp::PBO_None); }
+				UE_LOG(LogTemp, Warning, TEXT("[MIRA] %s: hueso '%s' oculto"), *GetName(), *N);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[MIRA] %s: NO existe el hueso '%s'"), *GetName(), *N);
+			}
+		}
+	}
+
+	// DIAGNOSTICO DE LA BOCA. Imprime, una vez por arma, donde acaba cayendo el
+	// punto del que salen bala, trazadora y laser, junto con las medidas de la
+	// malla. Con esto se ve si el socket vale o si hay que corregirlo.
+	if (FirstPersonMesh)
+	{
+		const bool bSocketOK = !MuzzleSocketName.IsNone() && FirstPersonMesh->DoesSocketExist(MuzzleSocketName);
+		FVector SocketLocal = FVector::ZeroVector;
+		if (bSocketOK)
+		{
+			SocketLocal = FirstPersonMesh->GetComponentTransform().InverseTransformPosition(
+				FirstPersonMesh->GetSocketLocation(MuzzleSocketName));
+		}
+		FVector Caja = FVector::ZeroVector, Centro = FVector::ZeroVector;
+		if (const USkeletalMesh* M = FirstPersonMesh->GetSkeletalMeshAsset())
+		{
+			Caja = M->GetBounds().BoxExtent;
+			Centro = M->GetBounds().Origin;
+		}
+		UE_LOG(LogTemp, Warning,
+			TEXT("[BOCA] %s | socket '%s' existe=%d local=%s | centro=%s extent=%s"),
+			*GetName(), *MuzzleSocketName.ToString(), bSocketOK ? 1 : 0,
+			*SocketLocal.ToCompactString(), *Centro.ToCompactString(), *Caja.ToCompactString());
+	}
+
+	Super::BeginPlay();
+
+	// subscribe to the owner's destroyed delegate
+	GetOwner()->OnDestroyed.AddDynamic(this, &AShooterWeapon::OnOwnerDestroyed);
+
+	// cast the weapon owner
+	WeaponOwner = Cast<IShooterWeaponHolder>(GetOwner());
+	PawnOwner = Cast<APawn>(GetOwner());
+
+	// fill the first ammo clip
+	CurrentBullets = MagazineSize;
+
+	// attach the meshes to the owner
+	WeaponOwner->AttachWeaponMeshes(this);
+}
+
+void AShooterWeapon::EndPlay(EEndPlayReason::Type EndPlayReason)
+{
+	ClearReloadMagazineVisual();
+	GetWorld()->GetTimerManager().ClearTimer(ReloadTimer);
+
+	Super::EndPlay(EndPlayReason);
+
+	// clear the refire timer
+	GetWorld()->GetTimerManager().ClearTimer(RefireTimer);
+}
+
+void AShooterWeapon::OnOwnerDestroyed(AActor* DestroyedActor)
+{
+	// ensure this weapon is destroyed when the owner is destroyed
+	Destroy();
+}
+
+void AShooterWeapon::ActivateWeapon(const FName& OwnerTag)
+{
+	// save the owner tag for perception noise detection
+	NoiseOwnerTag = OwnerTag;
+
+	// unhide this weapon
+	SetActorHiddenInGame(false);
+
+	// notify the owner
+	WeaponOwner->OnWeaponActivated(this);
+}
+
+void AShooterWeapon::DeactivateWeapon()
+{
+	// ensure we're no longer firing this weapon while deactivated
+	StopFiring();
+	if (bIsReloading)
+	{
+		bIsReloading = false;
+		GetWorld()->GetTimerManager().ClearTimer(ReloadTimer);
+		ClearReloadMagazineVisual();
+	}
+	bIsAiming = false;
+
+	// hide the weapon
+	SetActorHiddenInGame(true);
+
+	// notify the owner
+	WeaponOwner->OnWeaponDeactivated(this);
+}
+
+void AShooterWeapon::StartFiring()
+{
+	if (bIsReloading) { return; }
+
+	// raise the firing flag
+	bIsFiring = true;
+
+	// check how much time has passed since we last shot
+	// this may be under the refire rate if the weapon shoots slow enough and the player is spamming the trigger
+	const float TimeSinceLastShot = GetWorld()->GetTimeSeconds() - TimeOfLastShot;
+
+	if (TimeSinceLastShot > RefireRate)
+	{
+		// fire the weapon right away
+		Fire();
+
+	} else {
+
+		// if we're full auto, schedule the next shot
+		if (bFullAuto)
+		{
+			GetWorld()->GetTimerManager().SetTimer(RefireTimer, this, &AShooterWeapon::Fire, TimeSinceLastShot, false);
+		}
+
+	}
+}
+
+void AShooterWeapon::StopFiring()
+{
+	// lower the firing flag
+	bIsFiring = false;
+
+	// clear the refire timer
+	GetWorld()->GetTimerManager().ClearTimer(RefireTimer);
+}
+
+void AShooterWeapon::StartReload()
+{
+	// Una recarga a la vez; no se repone municion por arte de magia al llegar a 0.
+	if (bIsReloading || CurrentBullets >= MagazineSize || !WeaponOwner || !GetWorld())
+	{
+		return;
+	}
+
+	bIsReloading = true;
+	bIsAiming = false;
+	bIsFiring = false;
+	GetWorld()->GetTimerManager().ClearTimer(RefireTimer);
+	ReloadStartTime = GetWorld()->GetTimeSeconds();
+
+	// ANIMACION DE RECARGA EN LOS BRAZOS.
+	// El proyecto no trae ningun AnimMontage de recarga (solo dos de disparo),
+	// asi que ReloadMontage estaba a None y los brazos no se movian. Pero si
+	// existe la SECUENCIA MM_Rifle_Reload, y se puede reproducir directamente
+	// en el slot del AnimBP con PlaySlotAnimationAsDynamicMontage: crea el
+	// montaje al vuelo, sin necesidad de un asset.
+	if (ReloadMontage)
+	{
+		WeaponOwner->PlayFiringMontage(ReloadMontage);
+	}
+	else if (AMyProject7Character* Portador = Cast<AMyProject7Character>(PawnOwner))
+	{
+		USkeletalMeshComponent* Brazos = Portador->GetFirstPersonMesh();
+		if (UAnimInstance* Anim = Brazos ? Brazos->GetAnimInstance() : nullptr)
+		{
+			static UAnimSequenceBase* Recarga = LoadObject<UAnimSequenceBase>(nullptr,
+				TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Reload.MM_Rifle_Reload"));
+			if (Recarga)
+			{
+				// La velocidad se ajusta para que el clip dure exactamente lo
+				// que la recarga, y las manos acaben justo con el arma lista.
+				const float Largo = FMath::Max(Recarga->GetPlayLength(), 0.1f);
+				const float Velocidad = Largo / FMath::Max(ReloadDuration, 0.1f);
+				Anim->PlaySlotAnimationAsDynamicMontage(Recarga, FName("DefaultSlot"),
+					0.15f, 0.15f, Velocidad, 1, 0.0f, 0.0f);
+			}
+		}
+	}
+	if (ReloadSound && FirstPersonMesh)
+	{
+		UGameplayStatics::SpawnSoundAttached(ReloadSound, FirstPersonMesh);
+	}
+
+	GetWorld()->GetTimerManager().SetTimer(ReloadTimer, this,
+		&AShooterWeapon::FinishReload, ReloadDuration, false);
+}
+
+void AShooterWeapon::FinishReload()
+{
+	bIsReloading = false;
+	ClearReloadMagazineVisual();
+	CurrentBullets = MagazineSize;
+	if (WeaponOwner)
+	{
+		WeaponOwner->UpdateWeaponHUD(CurrentBullets, MagazineSize);
+	}
+}
+
+void AShooterWeapon::SetAiming(bool bNewAiming)
+{
+	bIsAiming = bNewAiming && !bIsReloading;
+}
+
+void AShooterWeapon::Fire()
+{
+	// ensure the player still wants to fire. They may have let go of the trigger
+	if (!bIsFiring || bIsReloading)
+	{
+		return;
+	}
+	
+	// fire a projectile at the target
+	FireProjectile(WeaponOwner->GetWeaponTargetLocation());
+
+	// Estampido. El SCAR usa un Sound Cue de fusil del paquete Free Weapon
+	// Sounds; no se toca la logica del proyectil, la boca ni las demas armas.
+	{
+		USoundBase* Disparo = FireSound;
+		const bool bEsSCAR = GetClass() && GetClass()->GetName().Contains(TEXT("ShooterWeapon_Rifle"));
+		if (bEsSCAR)
+		{
+			static USoundBase* DisparoSCAR = LoadObject<USoundBase>(nullptr,
+				TEXT("/Game/FreeWeaponSounds/Cue/AssaultRifle/Gunshots/assault_rifle_gunshot_02_Cue.assault_rifle_gunshot_02_Cue"));
+			if (DisparoSCAR)
+			{
+				Disparo = DisparoSCAR;
+			}
+		}
+		if (!Disparo)
+		{
+			static USoundBase* PorDefecto = LoadObject<USoundBase>(nullptr,
+				TEXT("/Game/Audio/freesound_community-single-gunshot-62-hp-37188.freesound_community-single-gunshot-62-hp-37188"));
+			Disparo = PorDefecto;
+		}
+		const FVector Boca = GetMuzzleWorldLocation();
+
+		if (Disparo)
+		{
+			UGameplayStatics::SpawnSoundAtLocation(this, Disparo, Boca, FRotator::ZeroRotator,
+				FireVolume, FirePitch * FMath::FRandRange(0.96f, 1.04f));
+		}
+
+		// TRAZADORA: el trazo luminoso que sale del cañon.
+		if (bTracerEnabled && WeaponOwner)
+		{
+			const FVector Objetivo = WeaponOwner->GetWeaponTargetLocation();
+			const FVector Dir = (Objetivo - Boca).GetSafeNormal();
+			SpawnTracer(Boca, Boca + Dir * TracerLength);
+		}
+	}
+
+	// update the time of our last shot
+	TimeOfLastShot = GetWorld()->GetTimeSeconds();
+
+	// make noise so the AI perception system can hear us
+	MakeNoise(ShotLoudness, PawnOwner, PawnOwner->GetActorLocation(), ShotNoiseRange, NoiseOwnerTag);
+
+	// are we full auto?
+	if (bFullAuto)
+	{
+		// schedule the next shot
+		GetWorld()->GetTimerManager().SetTimer(RefireTimer, this, &AShooterWeapon::Fire, RefireRate, false);
+	} else {
+
+		// for semi-auto weapons, schedule the cooldown notification
+		GetWorld()->GetTimerManager().SetTimer(RefireTimer, this, &AShooterWeapon::FireCooldownExpired, RefireRate, false);
+
+	}
+}
+
+void AShooterWeapon::FireCooldownExpired()
+{
+	// notify the owner
+	WeaponOwner->OnSemiWeaponRefire();
+}
+
+void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
+{
+	// get the projectile transform
+	FTransform ProjectileTransform = CalculateProjectileSpawnTransform(TargetLocation);
+	
+	// spawn the projectile
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.TransformScaleMethod = ESpawnActorScaleMethod::OverrideRootScale;
+	SpawnParams.Owner = GetOwner();
+	SpawnParams.Instigator = PawnOwner;
+
+	// PERDIGONES: una escopeta suelta varios a la vez, cada uno con su desvio.
+	// Con PelletsPerShot = 1 se comporta igual que antes.
+	const int32 Perdigones = FMath::Max(PelletsPerShot, 1);
+	AShooterProjectile* Projectile = nullptr;
+
+	for (int32 i = 0; i < Perdigones; ++i)
+	{
+		FTransform T = ProjectileTransform;
+		if (PelletSpread > 0.0f && Perdigones > 1)
+		{
+			// PATRON DE PERDIGONES REALISTA.
+			// Un cono uniforme (VRandCone a secas) reparte igual por todo el
+			// area y se ve artificial: parece una rejilla. Un cartucho real
+			// deja el centro mas denso y unos pocos perdigones abiertos.
+			//
+			//  - el primero va al centro exacto (el "nucleo" del tiro)
+			//  - los demas usan radio = sqrt(aleatorio), que agrupa hacia dentro
+			//  - angulo repartido en abanico + ruido, para que no salga simetrico
+			const FVector Dir = T.GetRotation().Vector();
+			if (i > 0)
+			{
+				const float Radio = FMath::Sqrt(FMath::FRand()) * FMath::DegreesToRadians(PelletSpread);
+				const float Angulo = (2.0f * PI * i) / Perdigones + FMath::FRandRange(-0.6f, 0.6f);
+
+				// base perpendicular a la linea de tiro
+				FVector Der, Arr;
+				Dir.FindBestAxisVectors(Arr, Der);
+				const FVector Desviado = (Dir
+					+ Der * (FMath::Cos(Angulo) * FMath::Tan(Radio))
+					+ Arr * (FMath::Sin(Angulo) * FMath::Tan(Radio))).GetSafeNormal();
+				T.SetRotation(Desviado.Rotation().Quaternion());
+			}
+		}
+
+		AShooterProjectile* P = GetWorld()->SpawnActor<AShooterProjectile>(ProjectileClass, T, SpawnParams);
+		if (P)
+		{
+			// El arma manda sobre daño y pegada, si los define.
+			if (ProjectileDamage > 0.0f) { P->SetHitDamage(ProjectileDamage); }
+			if (ProjectileForce > 0.0f)  { P->SetPhysicsForce(ProjectileForce); }
+			if (!Projectile) { Projectile = P; }
+		}
+	}
+
+	// set the noise tag on the projectile
+	if (Projectile)
+	{
+		Projectile->SetNoiseTag(NoiseOwnerTag);
+	}
+
+	// play the firing montage
+	WeaponOwner->PlayFiringMontage(FiringMontage);
+
+	// add recoil
+	WeaponOwner->AddWeaponRecoil(FiringRecoil);
+
+	// consume bullets
+	--CurrentBullets;
+
+	// if the clip is depleted, reload it
+	CurrentBullets = FMath::Max(CurrentBullets, 0);
+
+	// update the weapon HUD
+	WeaponOwner->UpdateWeaponHUD(CurrentBullets, MagazineSize);
+}
+
+FTransform AShooterWeapon::CalculateProjectileSpawnTransform(const FVector& TargetLocation) const
+{
+	// La boca REAL. Antes esto era GetSocketLocation() directo y, con un socket
+	// inexistente, devolvia el origen de la malla: la bala salia de la culata.
+	const FVector MuzzleLoc = GetMuzzleWorldLocation();
+
+	// calculate the spawn location ahead of the muzzle
+	const FVector SpawnLoc = MuzzleLoc + ((TargetLocation - MuzzleLoc).GetSafeNormal() * MuzzleOffset);
+
+	// find the aim rotation vector while applying some variance to the target 
+	const FRotator AimRot = UKismetMathLibrary::FindLookAtRotation(SpawnLoc, TargetLocation + (UKismetMathLibrary::RandomUnitVector() * AimVariance));
+
+	// return the built transform
+	return FTransform(AimRot, SpawnLoc, FVector::OneVector);
+}
+
+const TSubclassOf<UAnimInstance>& AShooterWeapon::GetFirstPersonAnimInstanceClass() const
+{
+	return FirstPersonAnimInstanceClass;
+}
+
+const TSubclassOf<UAnimInstance>& AShooterWeapon::GetThirdPersonAnimInstanceClass() const
+{
+	return ThirdPersonAnimInstanceClass;
+}
+
+// ============================================================================
+//  LASER
+//  Nace en la boca del arma y converge donde mira el jugador, que es de donde
+//  sale la bala (GetWeaponTargetLocation traza desde la camara). Por eso el
+//  punto rojo coincide siempre con el impacto real.
+// ============================================================================
+void AShooterWeapon::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	ApplyLiveFitFromConsole();
+	ApplyLiveYawFromConsole();
+	ApplyLiveMuzzleFromConsole();
+	ApplyLiveADSFromConsole();
+	ApplyLiveHideBonesFromConsole();
+	UpdateWeaponPose(DeltaSeconds);
+	UpdateReloadMagazineVisual();
+	UpdateLaser();
+
+	// Depuracion de la boca: esfera roja donde el codigo cree que esta, y
+	// linea verde hacia donde va a salir el tiro.
+	if (CVarDebugBoca.GetValueOnGameThread() != 0 && FirstPersonMesh && WeaponOwner)
+	{
+		const FVector Boca = GetMuzzleWorldLocation();
+		DrawDebugSphere(GetWorld(), Boca, 2.5f, 10, FColor::Red, false, -1.0f, 0, 0.4f);
+		const FVector Obj = WeaponOwner->GetWeaponTargetLocation();
+		DrawDebugLine(GetWorld(), Boca, Boca + (Obj - Boca).GetSafeNormal() * 300.0f,
+			FColor::Green, false, -1.0f, 0, 0.6f);
+		// y el origen de la malla, para ver el desfase
+		DrawDebugSphere(GetWorld(), FirstPersonMesh->GetComponentLocation(), 1.5f, 8,
+			FColor::Cyan, false, -1.0f, 0, 0.3f);
+	}
+}
+
+void AShooterWeapon::UpdateLaser()
+{
+	UWorld* World = GetWorld();
+	const bool bActivo = bLaserEnabled && World && WeaponOwner && FirstPersonMesh
+		&& FirstPersonMesh->IsVisible();
+
+	if (!bActivo)
+	{
+		if (LaserDot)  { LaserDot->SetVisibility(false); }
+		if (LaserBeam) { LaserBeam->SetVisibility(false); }
+		return;
+	}
+
+	// Emisor: la boca del cañon.
+	FVector Emisor = GetMuzzleWorldLocation();
+	if (!LaserOriginOffset.IsNearlyZero())
+	{
+		Emisor = FirstPersonMesh->GetComponentTransform().TransformPosition(LaserOriginOffset);
+	}
+
+	// Converge al punto al que apunta la mira: el mismo que usa el disparo.
+	const FVector Objetivo = WeaponOwner->GetWeaponTargetLocation();
+	const FVector Dir = (Objetivo - Emisor).GetSafeNormal();
+	const FVector Fin = Emisor + Dir * LaserRange;
+
+	// EL PARPADEO: antes esto trazaba por tipos de objeto e incluia
+	// ECC_PhysicsBody / ECC_WorldDynamic, asi que la BALA recien salida se
+	// interponia y el punto rojo saltaba a la boca y volvia, disparo a disparo.
+	// Ahora se traza por ECC_Visibility, el MISMO canal que usa el disparo
+	// (GetWeaponTargetLocation): los proyectiles no lo bloquean y ademas el
+	// punto rojo cae exactamente donde va a impactar la bala.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(WeaponLaser), true, GetOwner());
+	Params.AddIgnoredActor(this);
+	if (PawnOwner) { Params.AddIgnoredActor(PawnOwner); }
+
+	FHitResult Hit;
+	const bool bImpacta = World->LineTraceSingleByChannel(Hit, Emisor, Fin, ECC_Visibility, Params);
+	const FVector Impacto = bImpacta ? Hit.ImpactPoint : Fin;
+	const float Dist = FVector::Dist(Emisor, Impacto);
+
+	// Punto rojo, despegado un pelin de la pared para que no haga z-fighting.
+	if (LaserDot)
+	{
+		LaserDot->SetVisibility(bImpacta);
+		if (bImpacta)
+		{
+			// la esfera del motor mide 100 uu -> escala = cm / 100
+			const float S = FMath::Clamp(LaserDotSize * (1.0f + Dist / 900.0f), 0.5f, 9.0f) / 100.0f;
+			LaserDot->SetWorldLocation(Impacto + Hit.ImpactNormal * (S * 45.0f));
+			LaserDot->SetWorldScale3D(FVector(S));
+		}
+	}
+
+	// Haz: el cilindro del motor mide 100 uu de alto y va por +Z, asi que se
+	// alinea ese eje con la linea de tiro y se escala a la distancia.
+	if (LaserBeam)
+	{
+		LaserBeam->SetVisibility(bLaserBeamVisible && Dist > 15.0f);
+		if (bLaserBeamVisible && Dist > 5.0f)
+		{
+			LaserBeam->SetWorldLocationAndRotation(
+				(Emisor + Impacto) * 0.5f,
+				FRotationMatrix::MakeFromZ(Dir).Rotator());
+			const float G = LaserBeamThickness / 100.0f;
+			LaserBeam->SetWorldScale3D(FVector(G, G, Dist / 100.0f));
+		}
+	}
+}
+
+// ============================================================================
+//  TRAZADORA
+//  Un tramo luminoso que sale de la boca en la linea del disparo y se apaga en
+//  centesimas. No llega al blanco: una trazadora real se ve como un rayazo
+//  corto saliendo del cañon, no como una linea fija hasta la pared.
+// ============================================================================
+void AShooterWeapon::SpawnTracer(const FVector& Desde, const FVector& Hacia)
+{
+	UWorld* World = GetWorld();
+	if (!World) { return; }
+
+	static UStaticMesh* Cilindro = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	static UMaterialInterface* MatTrazo = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/BODYCAM_VFX/M_Spark"));
+	if (!Cilindro) { return; }
+
+	const float Largo = FVector::Dist(Desde, Hacia);
+	if (Largo < 5.0f) { return; }
+
+	UStaticMeshComponent* Trazo = NewObject<UStaticMeshComponent>(this);
+	Trazo->SetStaticMesh(Cilindro);
+	if (MatTrazo) { Trazo->SetMaterial(0, MatTrazo); }
+	Trazo->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Trazo->SetCastShadow(false);
+	Trazo->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::FirstPerson);
+	Trazo->RegisterComponentWithWorld(World);
+
+	// El cilindro del motor mide 100 uu y va por +Z: se alinea con la linea de
+	// tiro y se escala al largo pedido.
+	const FVector Dir = (Hacia - Desde).GetSafeNormal();
+	Trazo->SetWorldLocationAndRotation((Desde + Hacia) * 0.5f, FRotationMatrix::MakeFromZ(Dir).Rotator());
+	const float G = TracerThickness / 100.0f;
+	Trazo->SetWorldScale3D(FVector(G, G, Largo / 100.0f));
+
+	FTimerHandle T;
+	World->GetTimerManager().SetTimer(T, [Trazo]()
+	{
+		if (IsValid(Trazo)) { Trazo->DestroyComponent(); }
+	}, TracerLife, false);
+}
+
+// ============================================================================
+//  ENCAJE EN VIVO
+//  arma.fit <escala> <X> <Y> <Z> [pitch] [yaw] [roll]
+//  Mueve la malla del arma respecto al socket de la mano mientras juegas, para
+//  no tener que recompilar en cada intento.
+// ============================================================================
+void AShooterWeapon::ApplyLiveFitFromConsole()
+{
+	const FString Linea = CVarArmaFit.GetValueOnGameThread();
+	if (Linea.IsEmpty() || !FirstPersonMesh) { return; }
+	FString& Ultimo = GUltimoFit.FindOrAdd(this);
+	if (Linea == Ultimo) { return; }
+	Ultimo = Linea;
+
+	TArray<FString> P;
+	Linea.ParseIntoArrayWS(P);
+	if (P.Num() < 4)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ARMA] uso: arma.fit <escala> <X> <Y> <Z> [pitch] [yaw] [roll]"));
+		return;
+	}
+
+	const float Escala = FCString::Atof(*P[0]);
+	const FVector Loc(FCString::Atof(*P[1]), FCString::Atof(*P[2]), FCString::Atof(*P[3]));
+	FRotator Rot = FRotator::ZeroRotator;
+	if (P.Num() >= 7)
+	{
+		Rot = FRotator(FCString::Atof(*P[4]), FCString::Atof(*P[5]), FCString::Atof(*P[6]));
+	}
+
+	// Se guarda en el encaje; ApplyWeaponFit lo mantiene cada frame.
+	WeaponMeshScale = Escala;
+	WeaponMeshLocation = Loc;
+	WeaponMeshRotation = Rot;
+	UE_LOG(LogTemp, Warning, TEXT("[ARMA] %s -> escala %.3f loc %s rot %s"),
+		*GetName(), Escala, *Loc.ToCompactString(), *Rot.ToCompactString());
+}
+
+// ============================================================================
+//  GIRO SOBRE EL EJE VERTICAL - SOLO EL ARMA EN LA MANO
+//  arma.yaw <grados>
+//  El arma equipada es la unica que NO esta oculta (DeactivateWeapon esconde
+//  las demas). Asi este comando gira solo la que llevas y deja intactas las
+//  otras dos, cosa que arma.fit no hace porque reescribe la rotacion entera
+//  en todas a la vez.
+//
+//  El pivote es el socket de la mano: la culata (detras) va a un lado y la
+//  boca (delante) al contrario. El origen de la bala se calcula aparte, asi
+//  que la punteria no se resiente.
+// ============================================================================
+void AShooterWeapon::ApplyLiveYawFromConsole()
+{
+	const FString Linea = CVarArmaYaw.GetValueOnGameThread();
+	if (Linea.IsEmpty() || !FirstPersonMesh) { return; }
+
+	// Solo el arma en la mano obedece.
+	if (IsHidden()) { return; }
+
+	FString& Ultimo = GUltimoYaw.FindOrAdd(this);
+	if (Linea == Ultimo) { return; }
+	Ultimo = Linea;
+
+	const float Grados = FCString::Atof(*Linea);
+	WeaponMeshRotation.Yaw = Grados;
+	ADSMeshRotation.Yaw = Grados;
+	UE_LOG(LogTemp, Warning, TEXT("[ARMA] %s -> yaw %.2f (culata a un lado)"),
+		*GetName(), Grados);
+}
+
+// ============================================================================
+//  PUNTO DE SALIDA DE LA BALA - SOLO EL ARMA EN LA MANO
+//  arma.boca <X> <Y> <Z>
+//  Fija MuzzleLocalOffset en ejes locales de la malla. Con esto la trazadora y
+//  el proyectil salen justo de la boca real; bajar Z lo pega a la mano. Poner
+//  0 0 0 devuelve el calculo automatico por las medidas de la malla.
+// ============================================================================
+void AShooterWeapon::ApplyLiveMuzzleFromConsole()
+{
+	const FString Linea = CVarArmaBoca.GetValueOnGameThread();
+	if (Linea.IsEmpty() || !FirstPersonMesh) { return; }
+
+	// Solo el arma en la mano obedece; las guardadas estan ocultas.
+	if (IsHidden()) { return; }
+
+	FString& Ultimo = GUltimoBoca.FindOrAdd(this);
+	if (Linea == Ultimo) { return; }
+	Ultimo = Linea;
+
+	TArray<FString> P;
+	Linea.ParseIntoArrayWS(P);
+	if (P.Num() < 3)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ARMA] uso: arma.boca <X> <Y> <Z>  (ejes de la malla)"));
+		return;
+	}
+
+	MuzzleLocalOffset = FVector(FCString::Atof(*P[0]), FCString::Atof(*P[1]), FCString::Atof(*P[2]));
+	UE_LOG(LogTemp, Warning, TEXT("[ARMA] %s -> boca %s"),
+		*GetName(), *MuzzleLocalOffset.ToCompactString());
+}
+
+// ============================================================================
+//  BOCA DEL CAÑON
+//  Algunos Blueprints antiguos guardaban un socket/offset para un laser, no
+//  para la boca. Por defecto se calcula la cara frontal REAL de la malla en
+//  direccion de la mira. Asi el origen no depende de nombres de socket ni de
+//  ejes distintos entre armas importadas.
+// ============================================================================
+FVector AShooterWeapon::GetMuzzleWorldLocation() const
+{
+	if (!FirstPersonMesh) { return GetActorLocation(); }
+
+	// --- 1) Punta REAL, deducida de las medidas de la malla -----------------
+	// El origen de la malla cae donde la agarra la mano. Por tanto la boca es
+	// el extremo del eje LARGO que queda MAS LEJOS de ese origen. Esta regla
+	// acierta en las tres armas, incluida la M1911 (cañon hacia -X).
+	FVector Punta = FVector::ZeroVector;
+	bool bTengoPunta = false;
+	float LargoEje = 0.0f;
+
+	if (const USkeletalMesh* M = FirstPersonMesh->GetSkeletalMeshAsset())
+	{
+		const FBoxSphereBounds B = M->GetBounds();
+		const FVector C = B.Origin;
+		const FVector E = B.BoxExtent;
+
+		int32 Eje = 1;                                   // Y por defecto
+		if (E.X >= E.Y && E.X >= E.Z)      { Eje = 0; }
+		else if (E.Z >= E.X && E.Z >= E.Y) { Eje = 2; }
+
+		LargoEje = E[Eje];
+		const float Mas = C[Eje] + LargoEje;
+		const float Menos = C[Eje] - LargoEje;
+
+		Punta = C;
+		Punta[Eje] = (FMath::Abs(Mas) >= FMath::Abs(Menos)) ? Mas : Menos;
+		bTengoPunta = true;
+	}
+
+	// --- 2) Offset explicito: manda sobre todo lo demas ---------------------
+	if (!MuzzleLocalOffset.IsNearlyZero())
+	{
+		return FirstPersonMesh->GetComponentTransform().TransformPosition(MuzzleLocalOffset);
+	}
+
+	// --- 3) El socket, SOLO si de verdad esta en la punta -------------------
+	// El SCAR trae un socket 'weapon_scar17s' que esta en la CULATA (Y=-11.55
+	// medido, con la boca en Y=+48.18). Antes se aceptaba porque no coincidia
+	// con el origen; ahora se exige que este cerca de la punta calculada.
+	if (!MuzzleSocketName.IsNone() && FirstPersonMesh->DoesSocketExist(MuzzleSocketName))
+	{
+		const FVector SocketLocal = FirstPersonMesh->GetComponentTransform().InverseTransformPosition(
+			FirstPersonMesh->GetSocketLocation(MuzzleSocketName));
+
+		if (!bTengoPunta || FVector::Dist(SocketLocal, Punta) <= LargoEje * 0.35f)
+		{
+			return FirstPersonMesh->GetSocketLocation(MuzzleSocketName);
+		}
+	}
+
+	// --- 4) La punta calculada ---------------------------------------------
+	if (bTengoPunta)
+	{
+		return FirstPersonMesh->GetComponentTransform().TransformPosition(Punta);
+	}
+
+	return FirstPersonMesh->GetComponentLocation();
+}
+
+// ============================================================================
+//  ENCAJE PERSISTENTE
+//  AttachWeaponMeshes engancha la malla al socket de la mano con SnapToTarget,
+//  y eso deja la transformacion relativa en CERO. Aplicar el encaje solo en
+//  BeginPlay no vale: el enganche ocurre despues y lo borra. Por eso se
+//  reafirma cada frame. Es barato: tres comparaciones y, si ya coincide, nada.
+// ============================================================================
+void AShooterWeapon::ApplyWeaponFit()
+{
+	if (!FirstPersonMesh) { return; }
+
+	// Hip fire -> ADS se mezcla continuamente; no hay teletransporte del arma.
+	FVector DesiredLocation = FMath::Lerp(WeaponMeshLocation, ADSMeshLocation, ADSAlpha);
+	FRotator DesiredRotation = FMath::Lerp(WeaponMeshRotation, ADSMeshRotation, ADSAlpha);
+
+	// Durante la recarga el arma baja y gira levemente hacia el cargador. La
+	// curva vuelve a cero antes del final, dejando el arma estable al terminar.
+	if (bIsReloading && GetWorld())
+	{
+		const float T = FMath::Clamp((GetWorld()->GetTimeSeconds() - ReloadStartTime)
+			/ FMath::Max(ReloadDuration, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+		const float PoseAlpha = FMath::Sin(FMath::Clamp(T / 0.90f, 0.0f, 1.0f) * PI);
+		DesiredLocation += ReloadWeaponOffset * PoseAlpha;
+		DesiredRotation += ReloadWeaponRotation * PoseAlpha;
+	}
+
+	const FVector DesiredScale(WeaponMeshScale);
+
+	// El SCAR de FPS Arms Pack incluye un locator llamado "camera" exactamente
+	// donde debe estar el ojo al usar sus miras. Se alinea ese locator con la
+	// camara del jugador. Esto conserva el canion recto y pone miras trasera y
+	// delantera en el centro real, sin los desplazamientos laterales de un
+	// offset hard-codeado. Las armas sin locator mantienen el encaje anterior.
+	FTransform ADSWorld;
+	if (ADSAlpha > KINDA_SMALL_NUMBER && GetADSMeshWorldTransform(ADSWorld)
+		&& FirstPersonMesh->GetAttachParent())
+	{
+		const FTransform HipRelative(DesiredRotation, DesiredLocation, DesiredScale);
+		const FTransform HipWorld = HipRelative * FirstPersonMesh->GetAttachParent()->GetComponentTransform();
+
+		ADSWorld.SetScale3D(DesiredScale);
+		FTransform BlendedWorld = HipWorld;
+		BlendedWorld.Blend(HipWorld, ADSWorld, ADSAlpha);
+		FirstPersonMesh->SetWorldTransform(BlendedWorld, false, nullptr, ETeleportType::None);
+		return;
+	}
+
+	const FVector LocActual = FirstPersonMesh->GetRelativeLocation();
+	const FRotator RotActual = FirstPersonMesh->GetRelativeRotation();
+	const FVector EscActual = FirstPersonMesh->GetRelativeScale3D();
+	if (!LocActual.Equals(DesiredLocation, 0.01f) || !RotActual.Equals(DesiredRotation, 0.01f))
+	{
+		FirstPersonMesh->SetRelativeLocationAndRotation(DesiredLocation, DesiredRotation);
+	}
+	if (!EscActual.Equals(DesiredScale, 0.001f))
+	{
+		FirstPersonMesh->SetRelativeScale3D(DesiredScale);
+	}
+}
+
+bool AShooterWeapon::GetADSMeshWorldTransform(FTransform& OutTransform) const
+{
+	const AMyProject7Character* Character = Cast<AMyProject7Character>(PawnOwner);
+	const UCameraComponent* Camera = Character ? Character->GetFirstPersonCameraComponent() : nullptr;
+	const USkeletalMesh* Mesh = FirstPersonMesh ? FirstPersonMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!Camera || !Mesh || ADSReferenceBoneName.IsNone())
+	{
+		return false;
+	}
+
+	const FReferenceSkeleton& RefSkeleton = Mesh->GetRefSkeleton();
+	const int32 SightBoneIndex = RefSkeleton.FindBoneIndex(ADSReferenceBoneName);
+	if (SightBoneIndex == INDEX_NONE)
+	{
+		return false;
+	}
+
+	// Convierte el locator de su espacio local al espacio del componente usando
+	// la pose de referencia. El SCAR no anima este hueso durante disparo/ADS.
+	const TArray<FTransform>& RefPose = RefSkeleton.GetRefBonePose();
+	FTransform SightComponent = RefPose[SightBoneIndex];
+	for (int32 ParentIndex = RefSkeleton.GetParentIndex(SightBoneIndex);
+		ParentIndex != INDEX_NONE; ParentIndex = RefSkeleton.GetParentIndex(ParentIndex))
+	{
+		SightComponent = SightComponent * RefPose[ParentIndex];
+	}
+
+	// Transformacion de vista: +X es adelante en Unreal. Con offset cero el
+	// ojo queda exactamente tras la mira posterior del SCAR.
+	const FTransform SightWorld =
+		FTransform(ADSReferenceRotationOffset, ADSEyeOffset) * Camera->GetComponentTransform();
+	OutTransform = SightComponent.Inverse() * SightWorld;
+	return true;
+}
+
+void AShooterWeapon::UpdateWeaponPose(float DeltaSeconds)
+{
+	const bool bFijo = CVarADSFijo.GetValueOnGameThread() != 0;
+	const float TargetADS = (bIsAiming || bFijo) && !bIsReloading ? 1.0f : 0.0f;
+	ADSAlpha = FMath::FInterpTo(ADSAlpha, TargetADS, DeltaSeconds, ADSInterpolationSpeed);
+	ApplyWeaponFit();
+}
+
+bool AShooterWeapon::CacheMagazineBone()
+{
+	if (!FirstPersonMesh) { return false; }
+
+	USkeletalMesh* Mesh = FirstPersonMesh->GetSkeletalMeshAsset();
+	if (!Mesh) { return false; }
+	if (CachedMagazineMesh == Mesh && MagazineBoneIndex != INDEX_NONE && CachedMagazineRefPose.Num() > 0)
+	{
+		return true;
+	}
+
+	const FReferenceSkeleton& RefSkeleton = Mesh->GetRefSkeleton();
+	const int32 ClipIndex = RefSkeleton.FindBoneIndex(TEXT("weapon_scar17s_clip"));
+	if (ClipIndex == INDEX_NONE)
+	{
+		return false;
+	}
+
+	CachedMagazineMesh = Mesh;
+	CachedMagazineRefPose = RefSkeleton.GetRefBonePose();
+	MagazineBoneIndex = ClipIndex;
+	MagazineParentBoneIndex = RefSkeleton.GetParentIndex(ClipIndex);
+	return CachedMagazineRefPose.IsValidIndex(MagazineBoneIndex);
+}
+
+void AShooterWeapon::UpdateReloadMagazineVisual()
+{
+	if (!bIsReloading || !GetWorld() || !CacheMagazineBone()) { return; }
+
+	const float T = FMath::Clamp((GetWorld()->GetTimeSeconds() - ReloadStartTime)
+		/ FMath::Max(ReloadDuration, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+
+	// 0.00-0.16: la mano se suelta del guardamanos.
+	// 0.16-0.42: el cargador REAL baja fuera del magazine well.
+	// 0.42-0.62: queda fuera mientras la mano cambia cargador.
+	// 0.62-0.90: vuelve de forma continua y se encaja; sin aparecer ni desaparecer.
+	float TravelAlpha = 0.0f;
+	if (T >= 0.16f && T < 0.42f)
+	{
+		TravelAlpha = FMath::InterpEaseInOut(0.0f, 1.0f, (T - 0.16f) / 0.26f, 2.0f);
+	}
+	else if (T >= 0.42f && T < 0.62f)
+	{
+		TravelAlpha = 1.0f;
+	}
+	else if (T >= 0.62f && T < 0.90f)
+	{
+		TravelAlpha = 1.0f - FMath::InterpEaseInOut(0.0f, 1.0f, (T - 0.62f) / 0.28f, 2.0f);
+	}
+
+	TArray<FTransform> Pose = CachedMagazineRefPose;
+	FTransform ParentComponentTransform = FTransform::Identity;
+	TArray<int32> ParentChain;
+	for (int32 Bone = MagazineParentBoneIndex; Bone != INDEX_NONE; Bone = CachedMagazineMesh->GetRefSkeleton().GetParentIndex(Bone))
+	{
+		ParentChain.Add(Bone);
+	}
+	for (int32 Index = ParentChain.Num() - 1; Index >= 0; --Index)
+	{
+		ParentComponentTransform = CachedMagazineRefPose[ParentChain[Index]] * ParentComponentTransform;
+	}
+
+	// El -Z local es el eje vertical del SCAR importado. Un leve desplazamiento
+	// hacia atras sigue el gesto de sacar el cargador con la mano izquierda.
+	const FVector ComponentOffset(-4.0f * TravelAlpha, 0.0f,
+		-MagazineTravelDistance * TravelAlpha);
+	const FVector ParentLocalOffset = ParentComponentTransform.InverseTransformVectorNoScale(ComponentOffset);
+	Pose[MagazineBoneIndex].AddToTranslation(ParentLocalOffset);
+	FirstPersonMesh->SetRefPoseOverride(Pose);
+}
+
+void AShooterWeapon::ClearReloadMagazineVisual()
+{
+	if (FirstPersonMesh)
+	{
+		FirstPersonMesh->ClearRefPoseOverride();
+	}
+}
+
+// ============================================================================
+//  POSE DE APUNTADO EN VIVO
+//  arma.ads <X> <Y> <Z> [pitch] [yaw] [roll]
+//  X negativo lleva el arma hacia la izquierda, al centro de la pantalla y
+//  junto a los brazos, en vez de dejarla escapada a la derecha.
+// ============================================================================
+void AShooterWeapon::ApplyLiveADSFromConsole()
+{
+	const FString Linea = CVarArmaADS.GetValueOnGameThread();
+	if (Linea.IsEmpty()) { return; }
+	FString& Ultimo = GUltimoADS.FindOrAdd(this);
+	if (Linea == Ultimo) { return; }
+	Ultimo = Linea;
+
+	TArray<FString> P;
+	Linea.ParseIntoArrayWS(P);
+	if (P.Num() < 3)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ADS] uso: arma.ads <X> <Y> <Z> [pitch] [yaw] [roll]"));
+		return;
+	}
+
+	// El camino del hueso de referencia IGNORA ADSMeshLocation. Si el usuario
+	// esta calibrando a mano, manda el offset manual: se desactiva el hueso.
+	if (!ADSReferenceBoneName.IsNone())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ADS] %s usaba el hueso '%s'; paso a offset manual"),
+			*GetName(), *ADSReferenceBoneName.ToString());
+		ADSReferenceBoneName = NAME_None;
+	}
+
+	ADSMeshLocation = FVector(FCString::Atof(*P[0]), FCString::Atof(*P[1]), FCString::Atof(*P[2]));
+	if (P.Num() >= 6)
+	{
+		ADSMeshRotation = FRotator(FCString::Atof(*P[3]), FCString::Atof(*P[4]), FCString::Atof(*P[5]));
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[ADS] %s -> %s  rot %s"),
+		*GetName(), *ADSMeshLocation.ToCompactString(), *ADSMeshRotation.ToCompactString());
+}
+
+// ============================================================================
+//  OCULTAR HUESOS DEL ARMA
+//  La mira del SCAR viene DENTRO de la misma malla, con un unico slot de
+//  material y sin hueso propio evidente. Ocultar un hueso quita los vertices
+//  pegados a el, que es la unica forma de eliminar una pieza sin editar la
+//  geometria. Sirve para encontrar cual es a base de probar.
+// ============================================================================
+void AShooterWeapon::ApplyLiveHideBonesFromConsole()
+{
+	if (!FirstPersonMesh) { return; }
+
+	const FString Linea = CVarOcultarHueso.GetValueOnGameThread();
+	FString& Ultimo = GUltimoHuesos.FindOrAdd(this);
+	if (Linea == Ultimo) { return; }
+
+	// Volver a mostrar los que se ocultaron la vez anterior. No existe un
+	// ShowAllBones() en USkeletalMeshComponent, asi que se desocultan uno a uno
+	// leyendo la lista previa.
+	{
+		TArray<FString> Previos;
+		Ultimo.ParseIntoArray(Previos, TEXT(","), true);
+		for (FString& N : Previos)
+		{
+			N.TrimStartAndEndInline();
+			const FName Hueso(*N);
+			if (FirstPersonMesh->GetBoneIndex(Hueso) != INDEX_NONE)
+			{
+				FirstPersonMesh->UnHideBoneByName(Hueso);
+				if (ThirdPersonMesh) { ThirdPersonMesh->UnHideBoneByName(Hueso); }
+			}
+		}
+	}
+
+	Ultimo = Linea;
+
+	if (Linea.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[HUESOS] %s: todos visibles"), *GetName());
+		return;
+	}
+
+	TArray<FString> Nombres;
+	Linea.ParseIntoArray(Nombres, TEXT(","), true);
+	for (FString& N : Nombres)
+	{
+		N.TrimStartAndEndInline();
+		const FName Hueso(*N);
+		if (FirstPersonMesh->GetBoneIndex(Hueso) != INDEX_NONE)
+		{
+			FirstPersonMesh->HideBoneByName(Hueso, EPhysBodyOp::PBO_None);
+			if (ThirdPersonMesh) { ThirdPersonMesh->HideBoneByName(Hueso, EPhysBodyOp::PBO_None); }
+			UE_LOG(LogTemp, Warning, TEXT("[HUESOS] %s: oculto '%s'"), *GetName(), *N);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[HUESOS] %s: NO existe el hueso '%s'"), *GetName(), *N);
+		}
+	}
+}
