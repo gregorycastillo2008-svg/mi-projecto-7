@@ -30,6 +30,29 @@ static FVector GLeanOffsetPrevio = FVector::ZeroVector;
 static constexpr float GLeanVelocidad   = 11.0f;   // rapido pero sin tirones
 static constexpr float GLeanMargenPared = 14.0f;   // cm que se respetan al muro
 
+// Retroceso visual de la pistola del pack FPS. Se mantiene fuera de la clase
+// para que Live Coding no cambie su layout y se reinicia al soltar el gatillo.
+static bool GPistolTriggerWasDown = false;
+
+static bool HasEquippedPistol(const ACharacter* Character)
+{
+	if (!Character) { return false; }
+
+	// Las armas del BP_Player se adjuntan al mesh de primera persona. Detectar
+	// el actor adjunto evita depender de un Blueprint concreto (Pistol, PistolB
+	// o GhostPistol) y no toca su logica de disparo.
+	TArray<AActor*> AttachedActors;
+	Character->GetAttachedActors(AttachedActors, true, true);
+	for (const AActor* Actor : AttachedActors)
+	{
+		if (Actor && Actor->GetClass()->GetName().Contains(TEXT("Pistol"), ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 static TAutoConsoleVariable<FString> CVarBodycamLens(
 	TEXT("bodycam.lens"),
 	TEXT(""),
@@ -92,6 +115,21 @@ void AMyProject7CameraManager::ApplyBodycam(FTViewTarget& OutVT, float DeltaTime
 		Char = PCOwner ? Cast<ACharacter>(PCOwner->GetPawn()) : nullptr;
 	}
 	if (!Char) { return; }
+
+	// Una pistola semiautomatica debe sentirse seca y con peso. Este impulso se
+	// aplica al PRESIONAR LMB, no mientras se mantiene pulsado: no inventa tiros
+	// ni altera proyectiles, municion, precision o el sistema de armas.
+	const bool bTriggerDown = PCOwner && PCOwner->IsInputKeyDown(EKeys::LeftMouseButton);
+	if (bTriggerDown && !GPistolTriggerWasDown && HasEquippedPistol(Char))
+	{
+		AddShotImpulse(2.5f);
+		// Refuerzo exclusivo de pistola: elevacion fuerte con ligera deriva de
+		// muñeca; permanece acotado para no perder la mira ni marear al jugador.
+		ShotImpulse.Pitch = FMath::Clamp(ShotImpulse.Pitch - 0.65f, -2.0f, 0.0f);
+		ShotImpulse.Yaw = FMath::Clamp(ShotImpulse.Yaw + FMath::FRandRange(-0.22f, 0.22f), -0.8f, 0.8f);
+		ShotImpulse.Roll = FMath::Clamp(ShotImpulse.Roll + FMath::FRandRange(-0.16f, 0.16f), -1.0f, 1.0f);
+	}
+	GPistolTriggerWasDown = bTriggerDown;
 
 	const UCharacterMovementComponent* Move = Char->GetCharacterMovement();
 	if (!Move) { return; }
@@ -422,9 +460,9 @@ void AMyProject7CameraManager::ApplyBodycam(FTViewTarget& OutVT, float DeltaTime
 
 		// Vineta nativa muy ligera: solo define las esquinas, sin cerrar la imagen.
 		PP.bOverride_VignetteIntensity = true;
-		// El look bodycam conserva un borde oscuro moderado, incluso si un valor
+		// El look bodycam conserva solo un borde discreto, incluso si un valor
 		// antiguo del Blueprint quedo en cero.
-		const float AppliedVignette = FMath::Max(Bodycam.Vignette, 0.22f);
+		const float AppliedVignette = FMath::Max(Bodycam.Vignette, 0.05f);
 		PP.VignetteIntensity = FMath::Clamp(AppliedVignette * 0.55f, 0.0f, 1.0f);
 
 		// Aberracion cromatica: SOLO en la periferia. StartOffset alto = el centro
@@ -456,8 +494,8 @@ void AMyProject7CameraManager::ApplyBodycam(FTViewTarget& OutVT, float DeltaTime
 		PP.FilmGrainIntensity = Bodycam.FilmGrain;
 		PP.bOverride_ColorSaturation = true;
 		// 1.0 es neutro. Nunca permitir el 0.5 heredado que hacia que el juego
-		// pareciera blanco y negro; 1.4 conserva color real sin sobresaturarlo.
-		const float AppliedSaturation = FMath::Clamp(FMath::Max(Bodycam.Saturation, 1.4f), 0.0f, 2.0f);
+		// pareciera blanco y negro; 1.3 conserva color real sin sobresaturarlo.
+		const float AppliedSaturation = FMath::Clamp(FMath::Max(Bodycam.Saturation, 1.3f), 0.0f, 2.0f);
 		PP.ColorSaturation = FVector4(AppliedSaturation, AppliedSaturation, AppliedSaturation, 1.0f);
 		// Ajustable al instante desde la consola del juego, sin volver a abrir
 		// el editor ni tocar el resto de ajustes de la bodycam.
@@ -467,9 +505,9 @@ void AMyProject7CameraManager::ApplyBodycam(FTViewTarget& OutVT, float DeltaTime
 			{
 				TArray<FString> P;
 				Color.ParseIntoArrayWS(P);
-				if (P.Num() >= 1) { Bodycam.Saturation = FMath::Clamp(FCString::Atof(*P[0]), 1.4f, 2.0f); }
+				if (P.Num() >= 1) { Bodycam.Saturation = FMath::Clamp(FCString::Atof(*P[0]), 1.3f, 2.0f); }
 				if (P.Num() >= 2) { Bodycam.Contrast = FMath::Clamp(FCString::Atof(*P[1]), 0.5f, 2.0f); }
-				const float ConsoleSaturation = FMath::Clamp(FMath::Max(Bodycam.Saturation, 1.4f), 0.0f, 2.0f);
+				const float ConsoleSaturation = FMath::Clamp(FMath::Max(Bodycam.Saturation, 1.3f), 0.0f, 2.0f);
 				PP.ColorSaturation = FVector4(ConsoleSaturation, ConsoleSaturation, ConsoleSaturation, 1.0f);
 			}
 		}
