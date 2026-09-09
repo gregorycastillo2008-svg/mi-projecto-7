@@ -53,6 +53,7 @@ static bool HasEquippedPistol(const ACharacter* Character)
 	return false;
 }
 
+
 static TAutoConsoleVariable<FString> CVarBodycamLens(
 	TEXT("bodycam.lens"),
 	TEXT(""),

@@ -1,0 +1,464 @@
+{
+  ".claude/settings.json": {
+    "mtime": 1788935539.9010205,
+    "seen": 1788935651.2391894,
+    "ast_hash": "4f02775cec8cb67cee0335a7d4015a93",
+    "semantic_hash": "4f02775cec8cb67cee0335a7d4015a93"
+  },
+  "Automation_MyProject7.sln": {
+    "mtime": 1788403890.9791124,
+    "seen": 1788935651.2391894,
+    "ast_hash": "9a58c58cfdc34e735189a88dd7946069",
+    "semantic_hash": "9a58c58cfdc34e735189a88dd7946069"
+  },
+  "Automation_MyProject7.slnx": {
+    "mtime": 1788381576.6348965,
+    "seen": 1788935651.2391894,
+    "ast_hash": "77f3bc9a388bb510f66c5f2bfd609a5d",
+    "semantic_hash": "77f3bc9a388bb510f66c5f2bfd609a5d"
+  },
+  "Backup_RiderSetup_20260902_224828/Automation_MyProject7.sln": {
+    "mtime": 1788381576.6338978,
+    "seen": 1788935651.2391894,
+    "ast_hash": "7b761a3c122c60978ca7d45eb286fb97",
+    "semantic_hash": "7b761a3c122c60978ca7d45eb286fb97"
+  },
+  "Backup_RiderSetup_20260902_224828/Automation_MyProject7.slnx": {
+    "mtime": 1788381576.6348965,
+    "seen": 1788935651.2391894,
+    "ast_hash": "77f3bc9a388bb510f66c5f2bfd609a5d",
+    "semantic_hash": "77f3bc9a388bb510f66c5f2bfd609a5d"
+  },
+  "Backup_RiderSetup_20260902_224828/MyProject7.sln": {
+    "mtime": 1788381592.5564342,
+    "seen": 1788935651.2391894,
+    "ast_hash": "93688064bf3b3345c707b63ceba4d90e",
+    "semantic_hash": "93688064bf3b3345c707b63ceba4d90e"
+  },
+  "Backup_RiderSetup_20260902_224828/MyProject7.slnx": {
+    "mtime": 1788381592.5564342,
+    "seen": 1788935651.2391894,
+    "ast_hash": "ad41af6f18fbd19e66eab1011ebdc571",
+    "semantic_hash": "ad41af6f18fbd19e66eab1011ebdc571"
+  },
+  "MyProject7.sln": {
+    "mtime": 1788381592.5564342,
+    "seen": 1788935651.2391894,
+    "ast_hash": "93688064bf3b3345c707b63ceba4d90e",
+    "semantic_hash": "93688064bf3b3345c707b63ceba4d90e"
+  },
+  "MyProject7.slnx": {
+    "mtime": 1788381592.5564342,
+    "seen": 1788935651.2391894,
+    "ast_hash": "ad41af6f18fbd19e66eab1011ebdc571",
+    "semantic_hash": "ad41af6f18fbd19e66eab1011ebdc571"
+  },
+  "Source/MyProject7.Target.cs": {
+    "mtime": 1788381570.621903,
+    "seen": 1788935651.2391894,
+    "ast_hash": "e26ba74104df5a5cc8e6a39c6bc422e2",
+    "semantic_hash": "e26ba74104df5a5cc8e6a39c6bc422e2"
+  },
+  "Source/MyProject7Editor.Target.cs": {
+    "mtime": 1788381570.621903,
+    "seen": 1788935651.2391894,
+    "ast_hash": "41bdceade66233ff70fa2b58ac8dc110",
+    "semantic_hash": "41bdceade66233ff70fa2b58ac8dc110"
+  },
+  "Source/MyProject7/BattlefieldTrenchGenerator.cpp": {
+    "mtime": 1788669426.412913,
+    "seen": 1788935651.2391894,
+    "ast_hash": "ed60ee9f47afbe17085f40adef4b8ec1",
+    "semantic_hash": "ed60ee9f47afbe17085f40adef4b8ec1"
+  },
+  "Source/MyProject7/BattlefieldTrenchGenerator.h": {
+    "mtime": 1788669367.8655245,
+    "seen": 1788935651.2391894,
+    "ast_hash": "8a3a323104ccbfe681890cd05bace0f9",
+    "semantic_hash": "8a3a323104ccbfe681890cd05bace0f9"
+  },
+  "Source/MyProject7/MyProject7.Build.cs": {
+    "mtime": 1788657099.8975658,
+    "seen": 1788935651.2391894,
+    "ast_hash": "ae9e023dba5d371ad24ab7d8a05ee06d",
+    "semantic_hash": "ae9e023dba5d371ad24ab7d8a05ee06d"
+  },
+  "Source/MyProject7/MyProject7.cpp": {
+    "mtime": 1788381570.6229086,
+    "seen": 1788935651.2391894,
+    "ast_hash": "4e4e8d66674e2e178143eea813399c17",
+    "semantic_hash": "4e4e8d66674e2e178143eea813399c17"
+  },
+  "Source/MyProject7/MyProject7.h": {
+    "mtime": 1788381570.6229086,
+    "seen": 1788935651.2391894,
+    "ast_hash": "39ac85b586be6856e540ad1c3a6c61c9",
+    "semantic_hash": "39ac85b586be6856e540ad1c3a6c61c9"
+  },
+  "Source/MyProject7/MyProject7CameraManager.cpp": {
+    "mtime": 1788912329.0738761,
+    "seen": 1788935651.2391894,
+    "ast_hash": "e3b25c7d9196040a8a0d1caf44529ead",
+    "semantic_hash": "e3b25c7d9196040a8a0d1caf44529ead"
+  },
+  "Source/MyProject7/MyProject7CameraManager.h": {
+    "mtime": 1788552860.2773695,
+    "seen": 1788935651.2391894,
+    "ast_hash": "6371e4c45e6493e3cc42f36d98ed49a9",
+    "semantic_hash": "6371e4c45e6493e3cc42f36d98ed49a9"
+  },
+  "Source/MyProject7/MyProject7Character.cpp": {
+    "mtime": 1788393537.2960691,
+    "seen": 1788935651.2391894,
+    "ast_hash": "b346ad7a5619550aa10144495d933f8e",
+    "semantic_hash": "b346ad7a5619550aa10144495d933f8e"
+  },
+  "Source/MyProject7/MyProject7Character.h": {
+    "mtime": 1788381570.6249082,
+    "seen": 1788935651.2391894,
+    "ast_hash": "3562f43798e9d201c3c70f3947033fd9",
+    "semantic_hash": "3562f43798e9d201c3c70f3947033fd9"
+  },
+  "Source/MyProject7/MyProject7GameMode.cpp": {
+    "mtime": 1788381570.6269102,
+    "seen": 1788935651.2391894,
+    "ast_hash": "8467095db6f052450624d9ab88db4d77",
+    "semantic_hash": "8467095db6f052450624d9ab88db4d77"
+  },
+  "Source/MyProject7/MyProject7GameMode.h": {
+    "mtime": 1788381570.6269102,
+    "seen": 1788935651.2391894,
+    "ast_hash": "8e4decb87a2a178769156b2fb42adcef",
+    "semantic_hash": "8e4decb87a2a178769156b2fb42adcef"
+  },
+  "Source/MyProject7/MyProject7PlayerController.cpp": {
+    "mtime": 1788381570.628911,
+    "seen": 1788935651.2391894,
+    "ast_hash": "5331e615b69c9d41cd5f3841a0d4b93a",
+    "semantic_hash": "5331e615b69c9d41cd5f3841a0d4b93a"
+  },
+  "Source/MyProject7/MyProject7PlayerController.h": {
+    "mtime": 1788381570.628911,
+    "seen": 1788935651.2391894,
+    "ast_hash": "225f913424b4261695c0078e916c74d2",
+    "semantic_hash": "225f913424b4261695c0078e916c74d2"
+  },
+  "Source/MyProject7/Variant_Horror/HorrorCharacter.cpp": {
+    "mtime": 1788381570.629912,
+    "seen": 1788935651.2391894,
+    "ast_hash": "d36ce262ab9d99d06a21abaec5178fe8",
+    "semantic_hash": "d36ce262ab9d99d06a21abaec5178fe8"
+  },
+  "Source/MyProject7/Variant_Horror/HorrorCharacter.h": {
+    "mtime": 1788381570.629912,
+    "seen": 1788935651.2391894,
+    "ast_hash": "f9fb304683fb2ced9d0e39f6b7091f23",
+    "semantic_hash": "f9fb304683fb2ced9d0e39f6b7091f23"
+  },
+  "Source/MyProject7/Variant_Horror/HorrorGameMode.cpp": {
+    "mtime": 1788381570.6309109,
+    "seen": 1788935651.2391894,
+    "ast_hash": "85251d2eccaf27b0ee8924cb23c3c744",
+    "semantic_hash": "85251d2eccaf27b0ee8924cb23c3c744"
+  },
+  "Source/MyProject7/Variant_Horror/HorrorGameMode.h": {
+    "mtime": 1788381570.6314158,
+    "seen": 1788935651.2391894,
+    "ast_hash": "312cf24c7fd12dd4a5a1e5679b3c4abb",
+    "semantic_hash": "312cf24c7fd12dd4a5a1e5679b3c4abb"
+  },
+  "Source/MyProject7/Variant_Horror/HorrorPlayerController.cpp": {
+    "mtime": 1788381570.6314158,
+    "seen": 1788935651.2391894,
+    "ast_hash": "8aefcdc7011796106c4a07fcd24a79bb",
+    "semantic_hash": "8aefcdc7011796106c4a07fcd24a79bb"
+  },
+  "Source/MyProject7/Variant_Horror/HorrorPlayerController.h": {
+    "mtime": 1788381570.6324244,
+    "seen": 1788935651.2391894,
+    "ast_hash": "9c32125c05f3042804b1275bc0745d0f",
+    "semantic_hash": "9c32125c05f3042804b1275bc0745d0f"
+  },
+  "Source/MyProject7/Variant_Horror/UI/HorrorUI.cpp": {
+    "mtime": 1788381570.6354332,
+    "seen": 1788935651.2391894,
+    "ast_hash": "733032f39f4758aae89f080271971ac5",
+    "semantic_hash": "733032f39f4758aae89f080271971ac5"
+  },
+  "Source/MyProject7/Variant_Horror/UI/HorrorUI.h": {
+    "mtime": 1788381570.6364355,
+    "seen": 1788935651.2391894,
+    "ast_hash": "e8102cdc940caaa0828aa87422363c92",
+    "semantic_hash": "e8102cdc940caaa0828aa87422363c92"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/EnvQueryContext_Target.cpp": {
+    "mtime": 1788381570.6429558,
+    "seen": 1788935651.2391894,
+    "ast_hash": "7681bf0b97a5598adef467639ff440f8",
+    "semantic_hash": "7681bf0b97a5598adef467639ff440f8"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/EnvQueryContext_Target.h": {
+    "mtime": 1788381570.6439567,
+    "seen": 1788935651.2391894,
+    "ast_hash": "e2825073d8e803f6cd7a59a671c1d5e5",
+    "semantic_hash": "e2825073d8e803f6cd7a59a671c1d5e5"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/ShooterAIController.cpp": {
+    "mtime": 1788381570.6439567,
+    "seen": 1788935651.2391894,
+    "ast_hash": "60b693870ee1ae8e210c31e514c3538b",
+    "semantic_hash": "60b693870ee1ae8e210c31e514c3538b"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/ShooterAIController.h": {
+    "mtime": 1788381570.6449566,
+    "seen": 1788935651.2391894,
+    "ast_hash": "5446e4c7f240d23d920281365c301954",
+    "semantic_hash": "5446e4c7f240d23d920281365c301954"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/ShooterNPC.cpp": {
+    "mtime": 1788381570.645956,
+    "seen": 1788935651.2391894,
+    "ast_hash": "558c765469e15f9a30a86fea9c30e564",
+    "semantic_hash": "558c765469e15f9a30a86fea9c30e564"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/ShooterNPC.h": {
+    "mtime": 1788381570.645956,
+    "seen": 1788935651.2391894,
+    "ast_hash": "04c8cb9c9ccce9514d74c54133e079d6",
+    "semantic_hash": "04c8cb9c9ccce9514d74c54133e079d6"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/ShooterNPCSpawner.cpp": {
+    "mtime": 1788381570.645956,
+    "seen": 1788935651.2391894,
+    "ast_hash": "6bdfcb52b787238604dcc85423a18c68",
+    "semantic_hash": "6bdfcb52b787238604dcc85423a18c68"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/ShooterNPCSpawner.h": {
+    "mtime": 1788381570.6469562,
+    "seen": 1788935651.2391894,
+    "ast_hash": "c74fbe96ab976b2c0e782b0e07909487",
+    "semantic_hash": "c74fbe96ab976b2c0e782b0e07909487"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/ShooterStateTreeUtility.cpp": {
+    "mtime": 1788381570.6469562,
+    "seen": 1788935651.2391894,
+    "ast_hash": "cd23731541a2f0d39df91603ed553f98",
+    "semantic_hash": "cd23731541a2f0d39df91603ed553f98"
+  },
+  "Source/MyProject7/Variant_Shooter/AI/ShooterStateTreeUtility.h": {
+    "mtime": 1788381570.6479568,
+    "seen": 1788935651.2391894,
+    "ast_hash": "68a2d64cfab993d0dbab5104ddded06d",
+    "semantic_hash": "68a2d64cfab993d0dbab5104ddded06d"
+  },
+  "Source/MyProject7/Variant_Shooter/ShooterCharacter.cpp": {
+    "mtime": 1788403246.8162196,
+    "seen": 1788935651.2391894,
+    "ast_hash": "8fc334ea231d87a884ea6c3e5383eff5",
+    "semantic_hash": "8fc334ea231d87a884ea6c3e5383eff5"
+  },
+  "Source/MyProject7/Variant_Shooter/ShooterCharacter.h": {
+    "mtime": 1788401941.6245213,
+    "seen": 1788935651.2391894,
+    "ast_hash": "19b01f17c084e1c81669634c8a127efe",
+    "semantic_hash": "19b01f17c084e1c81669634c8a127efe"
+  },
+  "Source/MyProject7/Variant_Shooter/ShooterGameMode.cpp": {
+    "mtime": 1788381570.6334329,
+    "seen": 1788935651.2391894,
+    "ast_hash": "820e9f3b73764f79776d2a11b97cabdc",
+    "semantic_hash": "820e9f3b73764f79776d2a11b97cabdc"
+  },
+  "Source/MyProject7/Variant_Shooter/ShooterGameMode.h": {
+    "mtime": 1788381570.6344314,
+    "seen": 1788935651.2391894,
+    "ast_hash": "40319f1eb40b06c607091cfe3cd13bb9",
+    "semantic_hash": "40319f1eb40b06c607091cfe3cd13bb9"
+  },
+  "Source/MyProject7/Variant_Shooter/ShooterPlayerController.cpp": {
+    "mtime": 1788396700.8259096,
+    "seen": 1788935651.2391894,
+    "ast_hash": "4c9a261b7c0d92ef051ee38e06049fca",
+    "semantic_hash": "4c9a261b7c0d92ef051ee38e06049fca"
+  },
+  "Source/MyProject7/Variant_Shooter/ShooterPlayerController.h": {
+    "mtime": 1788396700.82491,
+    "seen": 1788935651.2391894,
+    "ast_hash": "dddd070a31640f26ded12d3dce68ad97",
+    "semantic_hash": "dddd070a31640f26ded12d3dce68ad97"
+  },
+  "Source/MyProject7/Variant_Shooter/UI/ShooterBulletCounterUI.cpp": {
+    "mtime": 1788381570.641948,
+    "seen": 1788935651.2391894,
+    "ast_hash": "0e8141abe3f07209fbf8c418faf9663b",
+    "semantic_hash": "0e8141abe3f07209fbf8c418faf9663b"
+  },
+  "Source/MyProject7/Variant_Shooter/UI/ShooterBulletCounterUI.h": {
+    "mtime": 1788381570.641948,
+    "seen": 1788935651.2391894,
+    "ast_hash": "189b8b898aa6f3d3ee14d339b0ae0143",
+    "semantic_hash": "189b8b898aa6f3d3ee14d339b0ae0143"
+  },
+  "Source/MyProject7/Variant_Shooter/UI/ShooterUI.cpp": {
+    "mtime": 1788381570.641948,
+    "seen": 1788935651.2391894,
+    "ast_hash": "09304a64af15a6b1c607ba498ca828bf",
+    "semantic_hash": "09304a64af15a6b1c607ba498ca828bf"
+  },
+  "Source/MyProject7/Variant_Shooter/UI/ShooterUI.h": {
+    "mtime": 1788381570.6429558,
+    "seen": 1788935651.2391894,
+    "ast_hash": "facdf7bc02b6267cea3bcfa46b2922dc",
+    "semantic_hash": "facdf7bc02b6267cea3bcfa46b2922dc"
+  },
+  "Source/MyProject7/Variant_Shooter/Weapons/ShooterPickup.cpp": {
+    "mtime": 1788381570.6364355,
+    "seen": 1788935651.2391894,
+    "ast_hash": "64d10922c9c5f9829d1593ed6414c8ec",
+    "semantic_hash": "64d10922c9c5f9829d1593ed6414c8ec"
+  },
+  "Source/MyProject7/Variant_Shooter/Weapons/ShooterPickup.h": {
+    "mtime": 1788381570.6374323,
+    "seen": 1788935651.2391894,
+    "ast_hash": "140a35e0f4567be59641fd09638c3aa5",
+    "semantic_hash": "140a35e0f4567be59641fd09638c3aa5"
+  },
+  "Source/MyProject7/Variant_Shooter/Weapons/ShooterProjectile.cpp": {
+    "mtime": 1788454290.8073103,
+    "seen": 1788935651.2391894,
+    "ast_hash": "83c0a8bccdba0f1bb10f6f86b3b726bf",
+    "semantic_hash": "83c0a8bccdba0f1bb10f6f86b3b726bf"
+  },
+  "Source/MyProject7/Variant_Shooter/Weapons/ShooterProjectile.h": {
+    "mtime": 1788395453.5770707,
+    "seen": 1788935651.2391894,
+    "ast_hash": "7a04c463ada42b9a679ac729adaa0aac",
+    "semantic_hash": "7a04c463ada42b9a679ac729adaa0aac"
+  },
+  "Source/MyProject7/Variant_Shooter/Weapons/ShooterWeapon.cpp": {
+    "mtime": 1788454381.4492795,
+    "seen": 1788935651.2391894,
+    "ast_hash": "0cd09491e34e170ac76772dc9f1f31d4",
+    "semantic_hash": "0cd09491e34e170ac76772dc9f1f31d4"
+  },
+  "Source/MyProject7/Variant_Shooter/Weapons/ShooterWeapon.h": {
+    "mtime": 1788404532.5279624,
+    "seen": 1788935651.2391894,
+    "ast_hash": "de5a2bcfe3d2b06753d3b4af12ac1e79",
+    "semantic_hash": "de5a2bcfe3d2b06753d3b4af12ac1e79"
+  },
+  "Source/MyProject7/Variant_Shooter/Weapons/ShooterWeaponHolder.cpp": {
+    "mtime": 1788381570.6394324,
+    "seen": 1788935651.2391894,
+    "ast_hash": "5e40d8537e7ec8862cafe7991d2c326a",
+    "semantic_hash": "5e40d8537e7ec8862cafe7991d2c326a"
+  },
+  "Source/MyProject7/Variant_Shooter/Weapons/ShooterWeaponHolder.h": {
+    "mtime": 1788381570.6409397,
+    "seen": 1788935651.2391894,
+    "ast_hash": "9186354f9d498ef753086ecbe5d1e032",
+    "semantic_hash": "9186354f9d498ef753086ecbe5d1e032"
+  },
+  "scripts/Build.ps1": {
+    "mtime": 1788381645.7140992,
+    "seen": 1788935651.2391894,
+    "ast_hash": "6bf3f1a3a7f7d4ab671af08bcebd76ae",
+    "semantic_hash": "6bf3f1a3a7f7d4ab671af08bcebd76ae"
+  },
+  "scripts/Editor.ps1": {
+    "mtime": 1788381633.9387028,
+    "seen": 1788935651.2391894,
+    "ast_hash": "7504568e4aa977f7edd850ec2baa8253",
+    "semantic_hash": "7504568e4aa977f7edd850ec2baa8253"
+  },
+  "scripts/GenerateProjectFiles.ps1": {
+    "mtime": 1788381633.9890049,
+    "seen": 1788935651.2391894,
+    "ast_hash": "0576af21d15d2eb4b2ada391f30d33f5",
+    "semantic_hash": "0576af21d15d2eb4b2ada391f30d33f5"
+  },
+  "scripts/Package.ps1": {
+    "mtime": 1788420340.5484922,
+    "seen": 1788935651.2391894,
+    "ast_hash": "47728bcab06cb44c6eb8164ba1e53d5a",
+    "semantic_hash": "47728bcab06cb44c6eb8164ba1e53d5a"
+  },
+  "scripts/Play.ps1": {
+    "mtime": 1788381633.919047,
+    "seen": 1788935651.2391894,
+    "ast_hash": "826b26185ad8624f6461e34d80bdf59e",
+    "semantic_hash": "826b26185ad8624f6461e34d80bdf59e"
+  },
+  "scripts/Py.ps1": {
+    "mtime": 1788381634.0120566,
+    "seen": 1788935651.2391894,
+    "ast_hash": "17432136b8738104970a5795e74262b9",
+    "semantic_hash": "17432136b8738104970a5795e74262b9"
+  },
+  "scripts/Rebuild.ps1": {
+    "mtime": 1788381633.9639933,
+    "seen": 1788935651.2391894,
+    "ast_hash": "32b27e74ecaede7eb6ff66b7c1be41e8",
+    "semantic_hash": "32b27e74ecaede7eb6ff66b7c1be41e8"
+  },
+  "scripts/_env.ps1": {
+    "mtime": 1788381633.876007,
+    "seen": 1788935651.2391894,
+    "ast_hash": "68e8b3cd65afca73e4ebde9acf0755d2",
+    "semantic_hash": "68e8b3cd65afca73e4ebde9acf0755d2"
+  },
+  "scripts/build_project7_exterior_phase1.py": {
+    "mtime": 1788554098.3355877,
+    "seen": 1788935651.2391894,
+    "ast_hash": "67f54e0d897e5c1f2a4d485573f25bf5",
+    "semantic_hash": "67f54e0d897e5c1f2a4d485573f25bf5"
+  },
+  "scripts/build_project7_exterior_phase2_lighting.py": {
+    "mtime": 1788557453.0005047,
+    "seen": 1788935651.2391894,
+    "ast_hash": "8883a80bd5235c64542a24aa7d6d8010",
+    "semantic_hash": "8883a80bd5235c64542a24aa7d6d8010"
+  },
+  "scripts/build_project7_exterior_phase3_detail.py": {
+    "mtime": 1788557609.573406,
+    "seen": 1788935651.2391894,
+    "ast_hash": "6c312b148129fac173be1776e1bfc836",
+    "semantic_hash": "6c312b148129fac173be1776e1bfc836"
+  },
+  "scripts/build_project7_exterior_phase4_dust.py": {
+    "mtime": 1788558365.225693,
+    "seen": 1788935651.2391894,
+    "ast_hash": "52fc6ad0868aa20933c95e76e5a1e6b3",
+    "semantic_hash": "52fc6ad0868aa20933c95e76e5a1e6b3"
+  },
+  "scripts/fix_project7_exterior_grounding.py": {
+    "mtime": 1788555148.7775395,
+    "seen": 1788935651.2391894,
+    "ast_hash": "d12fdbfc48384ad28ccb85b9c01ad184",
+    "semantic_hash": "d12fdbfc48384ad28ccb85b9c01ad184"
+  },
+  "scripts/inspect_derelict_world.py": {
+    "mtime": 1788554000.317739,
+    "seen": 1788935651.2391894,
+    "ast_hash": "5e1874cfd64fefa446b06e5f57cb4b3e",
+    "semantic_hash": "5e1874cfd64fefa446b06e5f57cb4b3e"
+  },
+  "scripts/inspect_project7_dark_facade.py": {
+    "mtime": 1788557952.3502684,
+    "seen": 1788935651.2391894,
+    "ast_hash": "40edaf2c6affcacb2689bc941596b83d",
+    "semantic_hash": "40edaf2c6affcacb2689bc941596b83d"
+  },
+  "scripts/set_project7_review_camera.py": {
+    "mtime": 1788558265.2371478,
+    "seen": 1788935651.2391894,
+    "ast_hash": "80157a56e038adfa0e5aeb3200c1ca83",
+    "semantic_hash": "80157a56e038adfa0e5aeb3200c1ca83"
+  },
+  "_ImportarAudio/interruptor_luz.wav": {
+    "mtime": 1788410699.1877682,
+    "seen": 1788935651.2391894,
+    "ast_hash": "db4ff5c83850b985d29b03f55a291a53",
+    "semantic_hash": "db4ff5c83850b985d29b03f55a291a53"
+  }
+}
