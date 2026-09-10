@@ -1,0 +1,327 @@
+{
+  "schemaVersion": 1,
+  "projectRoot": "D:\\Unreal Projects\\MyProject7",
+  "entities": [
+    {
+      "name": "Armas",
+      "entityType": "sistema_ue5",
+      "observations": [
+        "Contiene configuración, ADS, retroceso, munición, sonidos y efectos de las armas.",
+        "Documentar el arma, la tecla, el Blueprint y los valores aprobados antes de cambiarla.",
+        "BUG TRANSVERSAL (afectaba a las 3 armas, ya corregido): la rotación de disparo usaba PlayerCameraManager.GetCameraRotation(), que en este proyecto NO coincide con la rotación real de FirstPersonCamera (CameraManager custom con comportamiento propio). HISTORICO: primero se redirigio a FirstPersonCamera.K2_GetComponentRotation(); pero eso IGNORA el sway/turn-lag que ApplyBodycam le suma al POV FINAL (la reticula si los tiene), asi que la bala volvia a irse al lado. Fix definitivo (2026-09-10) en el composite 'Spawn Bullet': LineTrace desde el POV del PlayerCameraManager por su forward hasta el ImpactPoint, y FindLookAtRotation(bocacanon -> ImpactPoint). Para conectar nodos dentro de un composite anidado SIN título propio, usar --function-name con el título del composite contenedor más cercano que sí tenga nombre visible (list_blueprint_nodes/grep en el export_graph para encontrarlo — el path tipo 'Padre/Hijo' no funciona para composites de Blueprint regulares, a diferencia de los AnimGraph state machines).",
+        "RECETA ADS VALIDADA: usar el bool Aiming para seleccionar dos RelativeLocation del componente brazos+arma y VInterpTo cada Tick. Posición B = pose normal; Posición A = ADS. Para llevar el arma HACIA la cámara, aumentar X local; para subirla hacia la cara, aumentar Z local; Y sirve solo para centrar. No mover la cámara ni cambiar el mesh base. Validar al final: el arma entra/sale suave, mira centrada, sin afectar otra arma, BP compile con 0 errores/advertencias.",
+        "Sequence Player de un estado de disparo ('Fire') en un AnimBP: revisar bLoopAnimation — por defecto es true, y si el estado se sostiene más tiempo del que dura el clip (umbral de IsFiring en vez de duración real del clip), la animación se re-dispara sola varias veces por un solo click ('dispara 2-3 veces más'). Poner Node.bLoopAnimation=false vía set_blueprint_node_property.",
+        "Retroceso de ARMA (posición, no cámara) hecho desde cero en Blueprint, reusable por arma: variable *_KickOffset (Vector) por arma; en Fire Event (gateado por FPWeaponIndex) Set KickOffset=(valor fuerte, ej -20,0,7) en cada disparo; en el mismo Event Tick donde vive el VInterpTo del ADS de esa arma, decaer con VInterpTo(Current=KickOffset,Target=(0,0,0),DeltaTime,InterpSpeed alto ej 15) y SUMAR (Add_VectorVector) al resultado del VInterpTo de hip/ADS antes del SetRelativeLocation final — así no pisa el ADS, se monta encima. Da control total (fuerza y velocidad) sin depender de animación baked ni de AddShotImpulse (C++ opaco).",
+        "AddShotImpulse (C++, MyProject7CameraManager) solo toma Strength por Blueprint, pero su tooltip dice 'sincronizado con el disparo' — probablemente lee CurRecoilRecovery (variable de instancia, poblada desde RecoilRecovery de DT_FPWeapons) para la velocidad de recuperación del kick de cámara. Al agregar un arma nueva, poner RecoilRecovery proporcional a la inversa de FireDelay (referencia: Benelli FireDelay=0.85/Recovery=5 se siente bien) — un arma con FireDelay mucho menor (disparo rápido) necesita un Recovery MUCHO mayor, no un valor similar al de armas lentas, o el retroceso queda 'colgado' entre disparos.",
+        "TRAMPA AL AGREGAR ADS DE UN ARMA NUEVA: Event Tick solo tiene UN pin 'then' — si ya hay una rama de ADS de otra arma conectada ahí directo (sin Sequence), agregar el Set Relative Location de la arma nueva SIN insertar un Sequence la deja con el cálculo armado (SelectVector+VInterpTo con valores correctos) pero el execute sin disparar NUNCA — el arma no se mueve y no da ningún error de compilación (conecta bien a nivel de datos, solo falta el exec). Pasó exactamente eso entre el ADS del FN502 (conectado directo a Tick) y el del AK74M (quedó huérfano). Antes de agregar un ADS nuevo: revisar con qué ya está conectado Event Tick.then; si ya hay algo, insertar un Sequence en vez de reemplazar la conexión.",
+        "Trampa reutilizable: si un estado de AnimBP se sostiene por tiempo fijo (Delay en Blueprint) mayor a la duracion del AnimSequence y Node.bLoopAnimation quedo en true (default, nunca seteado), el clip se reinicia solo dentro de esa ventana -> se percibe como repeticion/duplicado. Revisar SequenceLength vs la duracion del estado en CUALQUIER arma nueva que se agregue.",
+        "Punto rojo de laser (no haz) agregado a las 4 armas (2026-09-10): componente unico LaserDot (StaticMeshComponent esfera chica, material M_LaserDot del pack) en BP_Player, independiente del arma equipada. Event Tick: LineTraceSingle desde FirstPersonCamera (rango 20000, bIgnoreSelf=true, bTraceComplex=true) -> si hay hit, mueve el dot a ImpactPoint+Normal*0.3 y lo muestra; si no hay hit, lo oculta. Reusa la misma rotacion de camara ya corregida para la trayectoria de bala, asi el punto cae exactamente donde va a pegar el disparo.",
+        "AMyProject7CameraManager (bodycam/free-aim) ignora PlayerController.SetControlRotation llamado desde Python/execute_python -- no sirve para forzar el angulo de camara en pruebas automatizadas de PIE. No es un bug, es diseño del sistema de camara custom. Para verificar visualmente algo que depende de hacia donde mira el personaje, hay que confiar en el compile limpio y pedirle confirmacion al usuario jugando con mouse real.",
+        "Regresion 2026-09-10: recompilar el Blueprint (compile_blueprint) mientras hay una sesion PIE corriendo puede cortar silenciosamente una conexion de exec en Event Tick sin dar ningun error de compilacion -- paso con el Sequence de ADS/retroceso/laser, que quedo con su pin execute sin ninguna conexion de entrada tras varias recompilaciones en caliente durante pruebas de PIE. Si algo que antes funcionaba en Tick deja de andar sin razon aparente, lo primero es exportar el grafo y revisar si el nodo relevante sigue teniendo una conexion de entrada real (no asumir por el numero de dangling_exec_chains, que ya era 39 de antes).",
+        "Laser (punto rojo) ahora es togglable con la tecla K (2026-09-10): IA_LaserToggle (Boolean, InputTriggerPressed) -> invierte bool LaserOn en BP_Player. El Branch(LaserOn) gatea el LineTraceSingle del laser en Event Tick: si esta apagado, oculta el punto sin tracear. Arranca en false (apagado) por defecto.",
+        "Bodycam profesional (2026-09-10): bug real encontrado en PP_BodycamLens -- el nodo CollectionParameter que lee MPC_BodycamMotion.BodycamMotion tenia ParameterName=None (nunca leia la velocidad real). Se fijo ParameterName + ParameterId (GUID exacto del parametro) para que resuelva. Viñeta reducida/empujada al borde (EdgeStart 0.70, EdgeEnd 0.92). Oscilacion por velocidad reactivada con amplitud leve y frecuencia que sube al correr. Blur leve de 4 tomas diagonales de SceneColor mezclado solo en la banda de la viñeta (Lerp por la misma mascara). CA de camara suavizada (Fringe 12->1.5, StartOffset 0.75). FilmGrain y viñeta estandar en 0 con override. Sharpen global bajado de 0.9 a 0.5 en DefaultEngine.ini. Confirmado visualmente en PIE con screenshots de esquina (viñeta+CA visibles solo cerca del borde) y de centro (limpio, sin CA/blur/vignette).",
+        "La textura sucia tipo madera/OSB que se ve en capturas de MyProject7 NO es un artefacto de post-proceso -- es el material real M_CQB_Wood_Professional de las paredes del mapa CQB_Wood_Houses/Backrooms_Level_0. Confirmado: ningun PostProcessVolume existe en ninguno de los dos mapas.",
+        "Impacto en hierro (2026-09-10): decal + chispas. Decal /Game/BODYCAM_VFX/Decals/M_Impact_MetalHole = material deferred_decal translucido, TextureSample T_BulletHole_Metal x Constant3(0.85,0.85,0.9) -> BaseColor, mascara circular irregular procedural (Distance a (0.5,0.5)*2.3=r; Noise(uv*10) via AppendVector(uv,0) para float3; saturate((1.02 - r + (noise-0.5)*0.55)*6)) -> Opacity, Metallic 0.25, Roughness 0.7. Chispas /Game/BODYCAM_VFX/FX/NS_Impact_Sparks_Metal = 2 emisores: Sparks (SpawnBurst_Instantaneous Count 110, Lifetime 0.45-1.6s, Sprite Size 1.2-4.5, Color [9,2.8,0.4,1] rojo-naranja al rojo vivo, AddVelocity cono 68 vel 650, Drag 3.2, Collision, curva ScaleColor enfria a rojo profundo y apaga; renderer M_Spark Alignment=Unaligned) + Embers (SpawnBurst Count 24, Lifetime 3.5-7.5s, Size 0.5-1.7, Color [4.5,1,0.12,1], AddVelocity cono 130 vel 175, GravityForce+Drag 5+Collision, curva baja brillo a 0). Enganche en BP_Bullet_AK47 y BP_Bullet1: overlap -> BreakHitResult -> EqualEqual_ObjectObject(PhysMat, PM_Metal) -> Branch. Decal M_Impact_MetalHole se spawnea SIEMPRE (ambas ramas, tras 'reemplaza la que tiene por esa nueva'); el Branch solo gatea SpawnSystemAtLocation(NS_Impact_Sparks_Metal, ImpactPoint, MakeRotFromX(ImpactNormal)) solo en metal. PM_Metal.surface_type=SURFACE_TYPE1; M_Metal.phys_material=PM_Metal. Notas Niagara: set_niagara_module_input usa nombres SIN espacios; reorder_niagara_module ROMPE el stack (1700+ err) -> nunca reordenar; Color como array JSON [r,g,b,a]; Directional Burst renderer viene VelocityAligned -> poner Unaligned para chispas redondas; Noise de material necesita float3 en Position -> AppendVector(uv,0).",
+        "Punteria: la bala se desviaba a la izquierda y 'bailaba' respecto a la mira (2026-09-10). Causa medida en PIE: una sesion previa puso la direccion del disparo con la rotacion CRUDA de FirstPersonCamera, pero la reticula (centro de pantalla) sigue el POV FINAL del PlayerCameraManager, al que AMyProject7CameraManager::ApplyBodycam() le suma cada frame micro-sway (activo incluso quieto), TurnLag (hasta MaxTurnLagDegrees al girar), lean, judder, shot-impulse (OutVT.POV.Rotation += ...). La bala ignoraba esos offsets -> caia 1-2 cm al lado a 34 m, oscilando con la fase del sway. Fix en el composite 'Spawn Bullet' de BP_Player, solo logica de trayectoria: LineTraceSingle desde GetCameraLocation del PlayerCameraManager por GetForwardVector(GetCameraRotation del PlayerCameraManager)*1e5; SelectVector(ImpactPoint si bBlockingHit, si no el punto lejano) -> Target de los 2 FindLookAtRotation (hip y ADS); Start sigue siendo la boca de canon MuzHip/MuzAim. Exec: el trace se inserto entre el nodo Inputs del composite y el Branch de escopeta (una vez por disparo). Reutiliza los nodos muertos GetCameraRotation 7A9ECDDE y GetCameraLocation F6BFBB64 (ambos del manager). Medido tras el fix: 0.00 cm de error, inmune al sway. La bala SIGUE saliendo del canon. Para editar 'Spawn Bullet' con cfa: build_blueprint_graph --graph-name 'Spawn Bullet' y connect_blueprint_nodes --function-name 'Spawn Bullet' (el composite no tiene titulo propio -> se usa el del contenedor). No tocar arma/camara/ADS/posicion/mapa.",
+        "Recarga (2026-09-10): la funcion self.Reload() de BP_Player NO reponia municion — el nodo Set Ammo=Magazine vivia en el sub-grafo Delay for Animation, inalcanzable (Branch sin exec de entrada; leftover del HK416 junto con AttachMag/DetachMag/Set HK_Reloading). El spine real de Reload era solo: Set States(Reloading=true, MaxWalkSpeed=250) -> Delay 2.75s -> Set Reloading=false. Resultado: al vaciar el cargador, Adjust Ammo Count (Fire Event) devuelve sin-balas cuando Ammo<=0 OR Ammo2<=0 -> dispara Reload If Ammo Out -> self.Reload() en CADA pulsacion de disparo = bucle de recarga. Ademas habia un PrintString(\"DBG_RELOAD_IF_OUT_ENTRA\") de debug en el composite Reload If Ammo Out. Fix: (A) borrado el PrintString (queda Inputs.execute->Reload.execute). (B) insertado en el spine real de Reload, antes de Set Reloading=false: Set Ammo=Magazine -> Set Ammo2=Magazine -> refresco del TextBlock UI_HUD.Ammo. El bucle se rompe porque Set States pone Reloading=true al instante y Fire queda bloqueado por Branch(Get Reloading).then (sin salida) durante los 2.75s. Modelo de municion: Ammo=cargador actual, Ammo2=reserva (empieza 60), Magazine=capacidad; UpdateFPWeaponHUD(MagSize) hace Set Magazine=Ammo=MagSize (NO toca Ammo2). Tras el fix Ammo2 se repone a Magazine en cada recarga -> reserva ilimitada de facto.",
+        "Escopeta Benelli = tecla 3 (IA_Weapon3 -> EquipFP index 1 -> fila Benelli de DT_FPWeapons). Mapeo teclas: IA_Weapon1->EquipFP(2)->AK74M, IA_Weapon2->EquipFP(3)->FN502, IA_Weapon3->EquipFP(1)->Benelli. La escopeta se veia gris porque su mesh (/Game/Anims/FPS_Benelli/Raw/HandWithGloves_AnimateRDY, 5 slots) usaba los materiales del importador FBX; el pack ya traia M_BenelliArms/Body/Glove/Match/Shell hechos a mano (2 rotos por un TextureSample vacio sampler MASKS, se borro y Constant->Roughness). Se asignaron los 5 al mesh por nombre de slot. Patron identico al FN502."
+      ]
+    },
+    {
+      "name": "Animaciones",
+      "entityType": "sistema_ue5",
+      "observations": [
+        "Contiene animaciones de manos, armas, recarga, disparo e idle.",
+        "Registrar el asset, esqueleto, frames y estado de importación."
+      ]
+    },
+    {
+      "name": "Blueprints",
+      "entityType": "sistema_ue5",
+      "observations": [
+        "Contiene Blueprints de jugador, cámara, puertas, mapas y armas.",
+        "Guardar rutas de assets y el propósito de cada cambio validado.",
+        "Bodycam cromática reforzada en FirstPersonCamera: SceneFringeIntensity=12, ChromaticAberrationStartOffset=0.58, ambos overrides activos y PostProcessBlendWeight=1. r.SceneColorFringeQuality=1 quedó persistido en DefaultEngine.ini y aplicado en sesión. El efecto se concentra en bordes y mantiene el centro legible. BP compilado/guardado y valores reexportados para validación.",
+        "Bodycam: PP_BodycamLens corregido a viñeta circular negra limpia (sin textura): EdgeStart=0.56, EdgeEnd=0.82, VignetteIntensity=1.0. Validación de grafo sana y asset guardado; pendiente prueba visual del usuario.",
+        "Bodycam fix: el grano de película de FirstPersonCamera (0.4) causaba la apariencia sucia. FilmGrainIntensity=0 y viñeta estándar=0; queda únicamente PP_BodycamLens como viñeta circular. BP compilado sin errores ni advertencias.",
+        "Bodycam aprobado: borde negro estático sin movimiento. Pulsación temporal y modulación por velocidad anuladas; EdgeStart=0.56, EdgeEnd=0.82, VignetteIntensity=1.0; cámara sin grano."
+      ]
+    },
+    {
+      "name": "CodeFizz",
+      "entityType": "herramienta_obligatoria",
+      "observations": [
+        "Para editar Unreal Engine 5.8 se debe usar CodeFizz mediante MCP/cfa.",
+        "Usar CodeFizz para inspeccionar, modificar, compilar, guardar y validar mapas, materiales, Blueprints, animaciones y assets.",
+        "No reemplazar CodeFizz por ediciones manuales cuando la tarea afecte Unreal."
+      ]
+    },
+    {
+      "name": "Protocolo_Memoria_Obligatorio",
+      "entityType": "reglas_de_trabajo",
+      "observations": [
+        "ANTES de modificar: buscar en memoria el sistema, asset, Blueprint, mapa o bug relacionado; no asumir que no existe historial.",
+        "DURANTE la modificación: usar exclusivamente CodeFizz para cambios de Unreal Engine y trabajar en pasos pequeños que se puedan verificar.",
+        "DESPUÉS de cada cambio importante: guardar en memoria la ruta exacta, qué se cambió, valores finales, cómo se validó y el estado (aprobado, pendiente o revertido).",
+        "CUANDO HAYA ERROR: guardar causa comprobada, solución aplicada, asset afectado y prueba de que dejó de ocurrir; consultar este registro antes de intentar otro arreglo.",
+        "No repetir cambios ya rechazados, revertidos o marcados como fallidos sin explicar por qué el nuevo intento es diferente.",
+        "Antes de terminar una tarea: resumir cambios, riesgos o pendientes y escribir ese resumen en memoria."
+      ]
+    },
+    {
+      "name": "Bugs_Solucionados",
+      "entityType": "registro_tecnico",
+      "observations": [
+        "Guardar causa, arreglo, asset afectado y cómo se verificó cada bug solucionado.",
+        "El registro técnico visible para Claude Code está en .claude/Bugs_Solucionados.md. Consultarlo antes de arreglar un bug."
+      ]
+    },
+    {
+      "name": "MyProject7",
+      "entityType": "proyecto_unreal",
+      "observations": [
+        "Ruta local: D:\\Unreal Projects\\MyProject7",
+        "Proyecto Unreal Engine 5.8 administrado con CodeFizz.",
+        "Mapa por defecto configurado: CQB_Wood_Houses es ahora EditorStartupMap, GameDefaultMap y ServerDefaultMap; Backrooms_Level_0 ya no se abre al iniciar el editor.",
+        "Bodycam pulido 2026-09-10: (BUG) el CollectionParameter de PP_BodycamLens que lee la velocidad tenia ParameterName=None y ParameterId en ceros -> el movimiento ligado a velocidad NUNCA funciono aunque BP_Player seteaba MPC_BodycamMotion.BodycamMotion bien (GetVelocity->VSizeXY->MapRangeClamped 0..650->0..1). Fix: setear ParameterName BodycamMotion Y el ParameterId (GUID real del MPC via 4 int32 A/B/C/D; setear solo el nombre no basta, da error de compilacion invalid parameter). Movimiento: amplitud node36.ConstB=0.035, frecuencia = 1.65 + speed*2.5 (nodos 39/40 nuevos -> node30.B). Viñeta mas fina EdgeStart=0.70 EdgeEnd=0.92 (OJO: el radio efectivo depende del aspect ratio -> en ultra-wide la viñeta se ve MUCHO mas grande que en 16:9). Desenfoque de borde: 4 SceneTexture PPI_PostProcessInput0 taps diagonales (+-0.0038 UV, filtered) + centro promediados, Lerp(sharp, blur, EdgeMask*0.6) insertado antes del Multiply final (node27.A <- node59 LinearInterpolate). Camara FirstPersonCamera PostProcessSettings: FilmGrainIntensity=0 override, VignetteIntensity=0 override (viñeta estandar off), SceneFringeIntensity=1.5, ChromaticAberrationStartOffset=0.75. r.Tonemapper.Sharpen=0.5 en DefaultEngine.ini [SystemSettings] (era 0.75). PP_BodycamLens NO tiene ninguna textura; la suciedad tipo virutas de madera de las capturas es el material OSB M_CQB_Wood_Professional de las paredes del mapa CQB, no la camara. No hay PostProcessVolume en Backrooms_Level_0 ni CQB_Wood_Houses. set_object_property (no set_blueprint_component_property) es el que acepta paths anidados tipo PostProcessSettings.X en un component template.",
+        "Bodycam viñeta (definitivo, leido del C++ 2026-09-10): camara real = BP_Player>FirstPersonCamera (UCameraComponent), ViewTarget=el pawn, sin CameraActor ni PostProcessVolume. ApplyBodycam() de MyProject7CameraManager.cpp:456-598 reescribe cada frame POV.PostProcessSettings Y los params escalares del material PP_BodycamLens via un MaterialInstanceDynamic. Mapeo: Bodycam.Vignette -> viñeta nativa max(v,0.05)*0.55 Y param VignetteIntensity del material max(v,0.05) [piso 0.05]; Bodycam.LensEdgeStart/LensEdgeEnd -> params EdgeStart/EdgeEnd; Bodycam.ChromaticAberration/ChromaticAberrationStartOffset; Bodycam.FilmGrain -> PP.FilmGrainIntensity; Bodycam.LensDirtIntensity -> BloomDirtMaskIntensity (textura de polvo); Bodycam.EdgeDarkening = KNOB MUERTO. El radial del material DEBE llevar *aspect sobre X (r 0..~1.03 en 16:9). Truco para desacoplar el borde del material del C++ sin recompilar: renombrar el ScalarParameter VignetteIntensity a otro nombre -> el SetScalarParameterValue del C++ queda no-op y manda el DefaultValue del nodo. Valores 2026-09-10: param renombrado a VigStrength=0.9, Bodycam.Vignette=0.2, LensEdgeStart=0.82, LensEdgeEnd=1.05, ChromaticAberration=0.15, StartOffset=0.80, FilmGrain=0, LensDirtIntensity=0, EdgeDarkening=0. r.Tonemapper.Sharpen=0.5."
+      ]
+    },
+    {
+      "name": "AK74M",
+      "entityType": "arma_fp",
+      "observations": [
+        "Tecla 1. Index=2 en DT_FPWeapons (Benelli=1). BulletClass=BP_Bullet_AK47.",
+        "Mesh brazos+arma combinado (AK74M_Arms), AnimBP propio ABP_FPS_AK74M, patrón idéntico a Benelli (Cast BP_Player, Reloading/GetVelocity/LastFireTime).",
+        "Rotación del disparo (hipfire) usa PlayerCameraManager.GetCameraRotation() directo, NO la rotación de MuzHip/MuzAim — solo la LOCATION del socket importa para la puntería.",
+        "MuzHip/MuzAim RelativeLocation calibrado por deproyección desde cámara (cam_loc + fwd*D - up*U, SIN offset lateral). IMPORTANTE: verificar SIEMPRE que cam.get_forward_vector() sea puro (1,0,0) antes de tomar la medición — el pawn puede heredar rotación residual entre sesiones de PIE y la calibración sale mal si se mide con la cámara no perfectamente alineada. Valor final aplicado: (0.1346, 65.0076, 24.0) local a AK74M_Arms, verificado con line trace (diff ~0.00004).",
+        "DT_FPWeapons: escribir BulletClass/FireSound/DisplayName (campos class/object/FText) requiere dt.fill_from_json_string(json) vía execute_python — add_data_table_row/update_data_table_row del CLI los dejan vacíos sin avisar.",
+        "Retroceso de cámara: AddShotImpulse(Strength=7.5) en MyProject7CameraManager, enganchado en Fire Event (las ramas viejas de otras armas no llegaban al AK).",
+        "Fogonazo final: PointLight amarilla AK74M_MuzzleLight (Intensity 0→3000→0 en 0.06s, bajada de 8000 porque a esa intensidad con bloom se veía como bola de fuego) + SpawnEmitterAtLocation con P_Impact_Metal_Small_01 (Scale 0.3 — reusa el efecto de impacto de bala en metal del pack, look de chispas pequeñas, en vez de P_AssaultRifle_MuzzleFlash que se veía como llamarada). Ambos nacen desde MuzHip (world location/rotation). La rama de luz+chispas en Fire Event está gateada por FPWeaponIndex==2.",
+        "Recarga: Delay 2.75s (igualado a la duración real de la animación de recarga, 2.65s).",
+        "Punteria (fix transversal 2026-09-10): la trayectoria ahora se orienta con un LineTrace desde el POV FINAL del PlayerCameraManager (con el sway del bodycam) hasta el punto de impacto, no con la rotacion cruda de FirstPersonCamera. Ver entidad Armas y Bugs_Solucionados. La bala sale del canon (MuzHip/MuzAim) y pega en la mira a cualquier distancia.",
+        "Recarga: usa FpsAnims_AnimRig_AK_Reload_var2 (2.82s) desde 2026-09-10 (antes AK_Reload 2.65s). Sequence Player del estado AnimGraph/AK74MSM/Reload de ABP_FPS_AK74M, Node.bLoopAnimation=false. El Delay de la funcion Reload de BP_Player esta en 2.85s para que entre completa.",
+        "Correr (Shift+W, 2026-09-10): estado Run en el state machine AnimGraph/AK74MSM de ABP_FPS_AK74M, Sequence Player FpsAnims_AnimRig_AK_Run en loop. Var bool IsRunning del AnimBP = BP_Player.Sprinting (seteada en EventGraph tras Set IsFiring). Transiciones Walk/Idle->Run (IsRunning), Run->Walk (!IsRunning), Run->Idle (!IsMoving), Run->Fire (IsFiring), Run->Reload (IsReloading). Este AnimBP tambien tiene IsMoving/IsFiring/IsReloading, todos casteando a BP_Player en BlueprintUpdateAnimation."
+      ]
+    },
+    {
+      "name": "FN502",
+      "entityType": "arma_fp",
+      "observations": [
+        "Tecla 2 (IA_Weapon2, ya existía sin mapear). Index=3 en DT_FPWeapons.",
+        "Paquete fps-animations-fn-502-tactical: FBX único con mesh combinado (brazos+arma soldados, 2 material slots 'arms'/'gun') + 6 animaciones (DefPose=Idle, Walk, Shot=Fire, Reload, ReloadFull sin usar, Run sin usar).",
+        "Import: AssetImportTask+FbxImportUI mínimo — import_morph_targets/import_bone_tracks/animation_length NO existen en la API Python de UE 5.8 para FbxSkeletalMeshImportData/FbxAnimSequenceImportData, se omiten.",
+        "Materiales auto-generados por el importador (arms/gun MaterialInstanceConstant) NO traen texturas reales (quedan en placeholders DefaultTexture) — hay que construir materiales propios con build_material_graph y asignarlos como OverrideMaterials.",
+        "AnimBP Sequence Player: la animación se asigna con set_blueprint_node_property --property-name 'Node.Sequence' (property anidada del struct interno, no un pin ni property de primer nivel). search_nodes necesita --graph-name con el path del state graph para encontrar su node_id.",
+        "BulletClass=BP_Bullet1 (misma bala que otras pistolas). MagSize=15, semiauto (FullAuto=false).",
+        "Boca de cañón calibrada por deproyección desde el arranque, sin offset lateral (mismo método aprendido con AK74M).",
+        "FN502 tecla 2: ADS propio en BP_Player. Al activar Aiming, FN502_Arms interpola desde (-7,-1,-22) hasta (8,-3.5,-9) con velocidad 24; al soltar vuelve a la posición normal. BP compilado y guardado sin errores ni advertencias.",
+        "FN502 ADS refinado por referencia visual: objetivo ADS final (30,-3.5,-2), más cercano a la cámara y elevado; normal (-7,-1,-22), VInterpTo 24. Mira centrada. BP compilado y guardado con 0 errores/advertencias.",
+        "FN502 ADS corrección por prueba visual: el target (30,-3.5,-2) dejaba brazos demasiado delante. Ajustado al compromiso (14,-3.5,-2): sigue elevado y centrado, pero a distancia natural de cámara. BP compilado y guardado con 0 errores/advertencias.",
+        "FN502 alineación: se corrigió la inclinación del arma ajustando solo FN502_Arms RelativeRotation de (Pitch 0, Yaw -89, Roll 0) a (Pitch 0, Yaw -89, Roll -15). Aplica en normal y ADS; BP compilado y guardado con 0 errores/advertencias.",
+        "FN502 ADS corrección de altura: la mira quedaba fuera de pantalla con Z=-2. El target ADS se bajó a (14,-3.5,-15), conservando distancia y centrado. BP compilado y guardado con 0 errores/advertencias.",
+        "FN502 inclinación final: ajustado RelativeRotation Roll de -15 a +3 para inclinar la pistola levemente hacia la derecha, sin alterar ADS location. BP compilado y guardado con 0 errores/advertencias.",
+        "Reload doble en FN502: la animacion FPS_AnimsArmature_FN_Reload dura 1.98s pero el estado Reload del AnimBP se sostiene 2.75s (Delay compartido de BP_Player); Node.bLoopAnimation=true (default) hacia que se reiniciara sola dentro de esa ventana, pareciendo recarga x2. Fix: Node.bLoopAnimation=false en el Sequence Player del estado Reload de ABP_FPS_FN502. Mismo patron que el bug de loop en el estado Fire.",
+        "Punteria (fix transversal 2026-09-10): la trayectoria ahora se orienta con un LineTrace desde el POV FINAL del PlayerCameraManager (con el sway del bodycam) hasta el punto de impacto, no con la rotacion cruda de FirstPersonCamera. Ver entidad Armas y Bugs_Solucionados. La bala sale del canon (MuzHip/MuzAim) y pega en la mira a cualquier distancia."
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "from": "MyProject7",
+      "to": "Armas",
+      "relationType": "contiene"
+    },
+    {
+      "from": "MyProject7",
+      "to": "Animaciones",
+      "relationType": "contiene"
+    },
+    {
+      "from": "MyProject7",
+      "to": "Blueprints",
+      "relationType": "contiene"
+    },
+    {
+      "from": "MyProject7",
+      "to": "CodeFizz",
+      "relationType": "se_edita_con"
+    },
+    {
+      "from": "MyProject7",
+      "to": "Protocolo_Memoria_Obligatorio",
+      "relationType": "se_rige_por"
+    },
+    {
+      "from": "MyProject7",
+      "to": "Bugs_Solucionados",
+      "relationType": "registra"
+    },
+    {
+      "from": "Armas",
+      "to": "AK74M",
+      "relationType": "contiene"
+    },
+    {
+      "from": "Armas",
+      "to": "FN502",
+      "relationType": "contiene"
+    }
+  ],
+  "changes": [
+    {
+      "timestamp": "2026-09-09T22:45:24.928951-04:00",
+      "type": "ui_menu",
+      "status": "approved",
+      "summary": "Menú inicial CROSSFIRE ZERO creado y verificado visualmente por el usuario. Al iniciar el juego carga /Game/Maps/MainMenu y muestra WBP_MapSelect.",
+      "assets": {
+        "menu_level": "/Game/Maps/MainMenu",
+        "game_mode": "/Game/UI/GM_MainMenu",
+        "controller": "/Game/UI/BP_MainMenuController",
+        "widget": "/Game/UI/WBP_MapSelect"
+      },
+      "map_buttons": {
+        "CQB WOOD HOUSES": "/Game/Maps/CQB_Wood_Houses",
+        "BACKROOMS LEVEL 0": "/Game/Maps/Backrooms_Level_0",
+        "WEAPON TEST": "/Game/Maps/Weapon_Test"
+      },
+      "implementation": "BP_MainMenuController BeginPlay creates WBP_MapSelect, adds it to the viewport, uses UI-only input and exposes the mouse cursor. MainMenu WorldSettings overrides GameMode to GM_MainMenu. GameDefaultMap and EditorStartupMap point to MainMenu.",
+      "validation": "Compiled BP_MainMenuController, GM_MainMenu and WBP_MapSelect with zero errors and zero warnings; user confirmed seeing the start page."
+    },
+    {
+      "timestamp": "2026-09-09T22:48:39.954409-04:00",
+      "type": "ui_menu_home",
+      "status": "approved",
+      "summary": "La portada inicial fue reemplazada por un home screen UMG basado en la referencia táctica: fondo casi negro, marca, estado, título CROSSFIRE/ZERO, tagline, botones JUGAR y AJUSTES, e identificación del operador.",
+      "assets": {
+        "home_widget": "/Game/UI/WBP_MainMenuHome",
+        "controller": "/Game/UI/BP_MainMenuController",
+        "map_selector": "/Game/UI/WBP_MapSelect"
+      },
+      "flow": "Inicio → WBP_MainMenuHome. JUGAR crea WBP_MapSelect y elimina la portada; AJUSTES abre UI_Settings.",
+      "validation": "WBP_MainMenuHome y BP_MainMenuController compilan sin errores ni advertencias; assets guardados."
+    },
+    {
+      "timestamp": "2026-09-09T22:55:41.370024-04:00",
+      "type": "ui_style",
+      "status": "approved",
+      "summary": "Portada WBP_MainMenuHome: fondo corregido a negro puro absoluto RGBA(0,0,0,1), sin tinte azul. Botones JUGAR y AJUSTES teñidos en rojo con texto blanco.",
+      "assets": [
+        "/Game/UI/WBP_MainMenuHome"
+      ],
+      "validation": "Compila sin errores; asset guardado tras detener PIE."
+    },
+    {
+      "timestamp": "2026-09-09T22:58:03.098702-04:00",
+      "type": "menu_input_and_settings",
+      "status": "approved",
+      "summary": "Se corrigieron los botones de portada y el desbloqueo de entrada al seleccionar mapas. Añadida selección de resolución funcional a los ajustes.",
+      "details": [
+        "Txt_Play y Txt_Options centrados dentro de los botones rojos; texto simplificado a JUGAR › y AJUSTES ›.",
+        "Cada botón de WBP_MapSelect ejecuta SetInputMode_GameOnly, oculta el cursor y limpia input antes de OpenLevel, para recuperar movimiento/cámara al entrar al mapa.",
+        "UI_Settings contiene Combo_Resolution con 1280x720, 1600x900, 1920x1080 y 2560x1440. Cambiar opción ejecuta r.SetRes inmediatamente. El panel ya tenía calidad gráfica Baja/Media/Alta y limitador FPS."
+      ],
+      "assets": [
+        "/Game/UI/WBP_MainMenuHome",
+        "/Game/UI/WBP_MapSelect",
+        "/Game/Super_Simple_FPS_Pack/Character/UI/Widgets/UI_Settings"
+      ],
+      "validation": "Los tres widgets relevantes compilan sin errores ni advertencias; assets guardados."
+    },
+    {
+      "timestamp": "2026-09-09T23:31:51.884776-04:00",
+      "type": "ui_map_selector_rebuild",
+      "status": "approved",
+      "summary": "Selector de campo de tiro reconstruido con tres tarjetas panoramicas de imagen, estilo táctico negro y botón Volver.",
+      "assets": {
+        "widget": "/Game/UI/WBP_MapSelect",
+        "textures": [
+          "/Game/UI/MapThumbnails/T_CQBWoodCard",
+          "/Game/UI/MapThumbnails/T_BackroomsCard",
+          "/Game/UI/MapThumbnails/T_WeaponTestCard"
+        ]
+      },
+      "map_buttons": {
+        "CQB WOOD HOUSES": "/Game/Maps/CQB_Wood_Houses",
+        "BACKROOMS LEVEL 0": "/Game/Maps/Backrooms_Level_0",
+        "WEAPON TEST": "/Game/Maps/Weapon_Test"
+      },
+      "implementation": "Fondo negro real con Brush DrawAs=Box; tarjetas con imágenes importadas; los tres botones conservan SetInputMode_GameOnly, ocultan cursor y cargan sus mapas. Btn_Back crea WBP_MainMenuHome y elimina el selector.",
+      "validation": "WBP_MapSelect valida 0 errores, 0 advertencias y 0 cadenas exec colgantes; texturas importadas como Texture2D."
+    },
+    {
+      "timestamp": "2026-09-10T00:25:46-04:00",
+      "type": "ui_crossfire_button_active_state",
+      "status": "approved_technical",
+      "summary": "WBP_MainMenuHome: JUGAR y AJUSTES muestran selección táctica roja con transición antes de navegar.",
+      "assets": {
+        "widget": "/Game/UI/WBP_MainMenuHome"
+      },
+      "implementation": {
+        "active_layers": [
+          "ActivePlay",
+          "ActiveOptions"
+        ],
+        "color": "rojo táctico oscuro R=0.62 G=0.008 B=0.012; texto blanco",
+        "animations": [
+          "Anim_SelectPlay",
+          "Anim_SelectOptions"
+        ],
+        "duration_seconds": 0.25,
+        "hud_brackets": "L blanca inferior-derecha; variante rojo claro al seleccionar",
+        "scanlines": "LowerScanlineLayer: 36 líneas sutiles bajo JUGAR",
+        "navigation": "clic espera 0.25 s antes de abrir selector o ajustes"
+      },
+      "validation": "WBP_MainMenuHome: compilación 0 errores/0 advertencias/0 exec colgantes y asset guardado."
+    },
+    {
+      "timestamp": "2026-09-10T00:39:09-04:00",
+      "type": "camera_color_saturation",
+      "status": "approved_technical",
+      "asset": "/Game/Super_Simple_FPS_Pack/Character/BP_Player.FirstPersonCamera",
+      "settings": {
+        "PostProcessSettings.ColorSaturation": {
+          "X": 0.7,
+          "Y": 0.7,
+          "Z": 0.7,
+          "W": 1.0
+        },
+        "description": "70% de saturación: color más sobrio, conserva lectura natural; 0 sería escala de grises."
+      },
+      "validation": "BP_Player compilado 0 errores/0 advertencias, valor releído y asset guardado."
+    },
+    {
+      "timestamp": "2026-09-10T00:40:18-04:00",
+      "type": "camera_color_saturation",
+      "status": "approved_technical",
+      "asset": "/Game/Super_Simple_FPS_Pack/Character/BP_Player.FirstPersonCamera",
+      "settings": {
+        "PostProcessSettings.ColorSaturation": {
+          "X": 0.25,
+          "Y": 0.25,
+          "Z": 0.25,
+          "W": 1.0
+        },
+        "description": "25%: colores muy apagados pero presentes; no es blanco y negro."
+      },
+      "validation": "BP_Player compilado 0 errores/0 advertencias, valor releído y asset guardado."
+    },
+    {
+      "timestamp": "2026-09-10T00:41:17-04:00",
+      "type": "camera_color_saturation",
+      "status": "approved_technical",
+      "asset": "/Game/Super_Simple_FPS_Pack/Character/BP_Player.FirstPersonCamera",
+      "settings": {
+        "PostProcessSettings.ColorSaturation": {
+          "X": 0.0,
+          "Y": 0.0,
+          "Z": 0.0,
+          "W": 1.0
+        },
+        "description": "0% por solicitud del usuario: imagen completamente monocromática."
+      },
+      "validation": "BP_Player compilado 0 errores/0 advertencias, valor releído y asset guardado."
+    }
+  ],
+  "last_updated": "2026-09-10T15:40:00-04:00"
+}
