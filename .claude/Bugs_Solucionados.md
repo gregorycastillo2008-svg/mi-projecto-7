@@ -295,3 +295,28 @@ Registro técnico de errores ya investigados. Consultar este archivo antes de in
 - **Validación realizada:** `get_material_errors` = 0 en los 5; en PIE `EquipFP(1)` → `FPWeaponIndex=1`, `Benelli_Arms` visible **con textura** (screenshot). 6 assets guardados (5 materiales + mesh).
 - **Mapeo de teclas confirmado:** `IA_Weapon1 → EquipFP(2) → AK74M`; `IA_Weapon2 → EquipFP(3) → FN502`; `IA_Weapon3 → EquipFP(1) → Benelli` (fila `Benelli` de `DT_FPWeapons`).
 - **Estado:** aprobado (pendiente confirmación visual del usuario en juego).
+
+### [2026-09-10] — SCAR pack (scar (2).zip) no se puede importar por CLI/Python
+
+- **Sistema / asset afectado:** import de `scar (2).zip` → destino previsto `/Game/Anims/FPS_SCAR/`, arma pedida en la **tecla 4**.
+- **Síntoma:** el import automático (`AssetImportTask` + `FbxImportUI` con skeletal mesh + animaciones) "funciona" pero produce assets basura, no un arma usable.
+- **Causa comprobada:** `source/SCAR.fbx` (4.8 MB) es un **FBX crudo de Blender** con el rig completo. El importador crea:
+  - `Circle_001_low` (el mesh de brazos+arma, con los 3 slots correctos `Material` / `glove_hardknuckle` / `sleeve_st6_generalist`) pero **skineado a 3 huesos de cámara** (`camera1`, `Camera`, `camera_end`) y a escala gigante (bounds extent ~`(2863,1573,1222)`).
+  - 7 `AnimSequence` (`SCARArmature_Hide/Idle/Reload/Run/Shoot/Take/Walk`, con duraciones reales — Reload 4.58 s) **atadas a `Circle_001_low_Skeleton`** (los 3 huesos de cámara) → inservibles.
+  - 8 `SkeletalMesh`/`Skeleton` basura de los **objetos widget del rig de Blender** (`shape_circle`, `shape_sphere`, `shape_plane`, `shape_finger`, `shape_pose`, …) + `crosshair1`.
+  - Mismo tipo de fallo documentado en [[myproject7-akm-zip-no-importa]] (Saiga = solo un Skeleton; aquí = mesh mal skineado + widgets).
+- **Solución aplicada:** borrado `/Game/Anims/FPS_SCAR` completo. FBX + PNGs dejados a mano en `D:\Unreal Projects\MyProject7\Saved\_scar_import\`.
+- **Camino correcto (pendiente, requiere un paso manual del usuario):**
+  1. En el editor: arrastrar `Saved\_scar_import\SCAR.fbx` al Content Browser (carpeta `/Game/Anims/FPS_SCAR/Raw`). En el diálogo: **Skeletal Mesh**, **Import All**, skeleton = None (crear nuevo), **Import Animations** ON. Revisar en el diálogo que el árbol de huesos tenga brazos/dedos/arma (no solo cámara). Si sigue saliendo cámara → re-exportar de Blender solo con el mesh + su armature de deform (borrar cámara y widgets del rig, aplicar transforms, escala 1, "Only Deform Bones", "Add Leaf Bones" OFF).
+  2. Ya con el mesh bueno, Claude hace el resto por `cfa`: reusar `M_BenelliArms` / `M_BenelliGlove` para los brazos (el pack trae **las mismas texturas** `glove_hardknuckle` / `sleeve_st6_generalist` que la Benelli), material propio para el cuerpo (`SCARL_LPForNormalFix_*`), fila nueva en `DT_FPWeapons`, `IA_Weapon4 → EquipFP(4)`, AnimBP con state machine (Idle/Walk/Run/Fire/Reload), componentes `SCAR_MuzHip`/`SCAR_MuzAim`, luz de fogonazo, ADS.
+- **Estado:** bloqueado — pendiente del import GUI del usuario.
+
+### [2026-09-10] — No se podía bajar la saturación de la cámara
+
+- **Sistema / asset afectado:** `AMyProject7CameraManager::ApplyBodycam()` (C++, líneas 496-512), material `/Game/BODYCAM_VFX/PP_BodycamLens`.
+- **Síntoma:** el juego se veía sobresaturado y ni `BP_Project7BodycamCameraManager` ni `FirstPersonCamera.PostProcessSettings.ColorSaturation` lo bajaban.
+- **Causa comprobada (leída del `.cpp`):** cada frame el C++ hace `PP.bOverride_ColorSaturation = true; PP.ColorSaturation = FVector4(FMath::Clamp(FMath::Max(Bodycam.Saturation, 1.3f), 0, 2), ...)`. El `FMath::Max(..., 1.3f)` es un **suelo duro de 1.3** (+30% de color). Poner `Bodycam.Saturation` a 1.0 no baja de 1.3, y el valor del componente de cámara lo pisa el C++ igual. Editar el C++ está bloqueado (ver [[myproject7-cpp-build-blocked]]).
+- **Solución aplicada (solo `cfa`, sin tocar C++):** `PP_BodycamLens` ya es un material **post-process** en los blendables de la cámara y corre **después del tonemapper** (donde se aplica `ColorSaturation`). Se insertó un nodo `Desaturation` entre el `Multiply` final (node 27 = imagen compuesta) y `EmissiveColor`, con `Fraction` = nuevo `ScalarParameter` **`DesatAmount`** (DefaultValue **0.30**). El C++ solo setea `LensDistortion`/`EdgeStart`/`EdgeEnd`/`VignetteIntensity` en el MID — **no toca `DesatAmount`**, así que su default manda. Neto: −30% de saturación sobre el +30% forzado → color casi neutro.
+- **Ajuste:** subir `DesatAmount` (hacia 0.5) = menos color; bajar (hacia 0) = más color. Es el `DefaultValue` del nodo `DesatAmount` en `PP_BodycamLens`.
+- **Validación realizada:** `recompile_material` = 0 errores; confirmado en PIE (escena visiblemente menos saturada).
+- **Estado:** aprobado (pendiente que el usuario diga si quiere más o menos).
