@@ -106,7 +106,8 @@
         "Recarga: Delay 2.75s (igualado a la duración real de la animación de recarga, 2.65s).",
         "Punteria (fix transversal 2026-09-10): la trayectoria ahora se orienta con un LineTrace desde el POV FINAL del PlayerCameraManager (con el sway del bodycam) hasta el punto de impacto, no con la rotacion cruda de FirstPersonCamera. Ver entidad Armas y Bugs_Solucionados. La bala sale del canon (MuzHip/MuzAim) y pega en la mira a cualquier distancia.",
         "Recarga: usa FpsAnims_AnimRig_AK_Reload_var2 (2.82s) desde 2026-09-10 (antes AK_Reload 2.65s). Sequence Player del estado AnimGraph/AK74MSM/Reload de ABP_FPS_AK74M, Node.bLoopAnimation=false. El Delay de la funcion Reload de BP_Player esta en 2.85s para que entre completa.",
-        "Correr (Shift+W, 2026-09-10): estado Run en el state machine AnimGraph/AK74MSM de ABP_FPS_AK74M, Sequence Player FpsAnims_AnimRig_AK_Run en loop. Var bool IsRunning del AnimBP = BP_Player.Sprinting (seteada en EventGraph tras Set IsFiring). Transiciones Walk/Idle->Run (IsRunning), Run->Walk (!IsRunning), Run->Idle (!IsMoving), Run->Fire (IsFiring), Run->Reload (IsReloading). Este AnimBP tambien tiene IsMoving/IsFiring/IsReloading, todos casteando a BP_Player en BlueprintUpdateAnimation."
+        "Correr (Shift+W, 2026-09-10): estado Run en el state machine AnimGraph/AK74MSM de ABP_FPS_AK74M, Sequence Player FpsAnims_AnimRig_AK_Run en loop. Var bool IsRunning del AnimBP = BP_Player.Sprinting (seteada en EventGraph tras Set IsFiring). Transiciones Walk/Idle->Run (IsRunning), Run->Walk (!IsRunning), Run->Idle (!IsMoving), Run->Fire (IsFiring), Run->Reload (IsReloading). Este AnimBP tambien tiene IsMoving/IsFiring/IsReloading, todos casteando a BP_Player en BlueprintUpdateAnimation.",
+        "Fogonazo/disparo (2026-09-10): se borro el fogonazo falso (reuso de P_Impact_Metal_Small_01, nodos huerfanos). Ahora SpawnEmitterAttached(P_AssaultRifle_MuzzleFlash, a AK74M_MuzHip, Scale 0.4) en la rama Branch(FPWeaponIndex==2).then de Fire Event. AK74M_MuzHip/MuzAim RelLoc = (0,50,13) (antes 0.13,65,24 flotaba sobre el cañón; ahora en la linea del cañón, 1.2cm del hueso Rif). La bala nace ahi y converge en la mira via el composite Spawn Bullet."
       ]
     },
     {
@@ -326,7 +327,59 @@
         "description": "0% por solicitud del usuario: imagen completamente monocromática."
       },
       "validation": "BP_Player compilado 0 errores/0 advertencias, valor releído y asset guardado."
+    },
+    {
+      "timestamp": "2026-09-10T12:12:49-04:00",
+      "type": "diagnosis_ak74m_muzzle_offset",
+      "status": "pending_user_authorization",
+      "asset": "/Game/Super_Simple_FPS_Pack/Character/BP_Player",
+      "findings": {
+        "trajectory": "Spawn Bullet orienta hacia el objetivo de cámara, por lo que la dirección no agrega offset lateral.",
+        "origin": "La bala usa GetWorldLocation(AK74M_MuzHip/MuzAim).",
+        "muzzle_locations": {
+          "AK74M_MuzHip": {
+            "X": 0,
+            "Y": 50,
+            "Z": 13
+          },
+          "AK74M_MuzAim": {
+            "X": 0,
+            "Y": 50,
+            "Z": 13
+          }
+        },
+        "projectile_offset": {
+          "X": 0,
+          "Y": 0,
+          "Z": 0
+        }
+      },
+      "conclusion": "El desplazamiento visual reportado de ~5 cm viene de la calibración del componente de boca de cañón frente al mesh AK, no de la trayectoria. Requiere ajuste visual controlado de AK74M_MuzHip y AK74M_MuzAim; no se modificó nada durante el diagnóstico."
+    },
+    {
+      "timestamp": "2026-09-10T12:15:59-04:00",
+      "type": "ak74m_muzzle_recalibration",
+      "status": "approved_technical_pending_visual",
+      "asset": "/Game/Super_Simple_FPS_Pack/Character/BP_Player",
+      "settings": {
+        "AK74M_MuzHip": {
+          "RelativeLocation": {
+            "X": -5.0,
+            "Y": 50.0,
+            "Z": 13.0
+          }
+        },
+        "AK74M_MuzAim": {
+          "RelativeLocation": {
+            "X": -5.0,
+            "Y": 50.0,
+            "Z": 13.0
+          }
+        }
+      },
+      "reason": "El usuario reportó que el disparo aparecía unos 5 cm a la izquierda del cañón. Solo se movieron los puntos de origen hacia la derecha visual; no se tocó AK, ADS, cámara ni trayectoria.",
+      "validation": "BP_Player compilado 0 errores/0 advertencias; ambos valores releídos y asset guardado."
     }
   ],
-  "last_updated": "2026-09-10T19:30:00-04:00"
+  "last_updated": "2026-09-10T12:15:59-04:00"
 }
