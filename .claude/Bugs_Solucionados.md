@@ -1,5 +1,21 @@
 # Bugs solucionados — MyProject7
 
+## Colision AK sobredimensionada; punteria aun pendiente
+- 2026-09-11 AK: BP_Bullet_AK47.ColSphere SphereRadius48->3 con escala0.1 (radio efectivo4.8cm->0.3cm). Compila0/0 guardado. La colision era sobredimensionada; NO probado que explique desvio lateral ADS. Spawn Bullet trace verificado usa GetCameraLocation+GetCameraRotation finales. ADS en PIE FPWeaponIndex2 AK74M_Arms RelLoc(7.780463,-3.5,-21.923162), MuzAim(0,50,13). Calibracion visual y prueba impactos pendientes; no declarar resuelto.
+
+## Mezcla suelo pendiente: contencion de rectangulos blancos
+- 2026-09-11 Abandoned_Courtyard suelo: MI_AC_MossGround copia MI_vcqhcig Tiling13 aplicado a AC_Ground.28 decals Military Dirt AC_GroundDirt_ dieron rectangulos blancos en PIE; ocultados en juego/editor y guardados recuperables. Mezcla NO terminada, revisar dominio/texturas/alpha del material importado antes de reactivar.
+
+## Laser K oculto y direccion de disparo inconsistente (2026-09-11)
+- BP_Player LaserDot bHiddenInGame=true anulaba SetVisibility(true) de K; puesto false. Grafo Spawn Bullet trazaba desde CameraManager pero vector direccion de ComponentRotation: reconectado GetCameraRotation al ForwardVector de trace. Compila0/0, guardado. Validacion PIE y calibracion fisica cañon pendientes; no afirmar aprobacion visual.
+
+## Abandoned_Courtyard: texto sobre ventanas y jardinera cruzada
+- 2026-09-11: textos movidos a banda entre plantas Z352/354, tamano46/44, caras interiores +/-784cm. Jardinera laterales22x390x40cm, extremos480x22x40cm. Goteos antiguos ocultos y recuperables. Guardado CFA con guardia de mundo, captura revisada. Arte final y recorrido pendientes.
+
+## BR26 en MainMenu durante trabajo paralelo
+- Corrección: eliminar SOLO prefijo BR26_ de MainMenu. Aplicar conjunto a `/Game/Maps/Backrooms_Level_0`, validando identidad del mundo dentro de la misma llamada CFA Python antes de mutar y guardar. No confiar en una llamada previa a open_level si otras sesiones trabajan sobre el editor.
+- Materiales Backrooms: M_BR26_Paper/Carpet/Ceiling/Base/Frame/Lamp. 214 mallas +79 luces; luces Movable para evitar canales estacionarios solapados. Menú original protegido.
+
 ## CQB referencia: iluminación excesiva, 2026-09-10 noche
 - Usuario rechazó techo=7500/interiores=550/relleno=3000 por blanco excesivo. Reducidos mediante CodeFizz a 2800/180/250, 5800K e indirecta=1; 27 escrituras correctas y nivel guardado. Pendiente aprobación visual.
 - `spawn_actors_batch` no creó RectLight (12 fallos); usar `spawn_actor_by_class /Script/Engine.RectLight`. Reparados los 12 mediante este comando.
