@@ -1,5 +1,10 @@
 # Bugs solucionados — MyProject7
 
+## CQB referencia: iluminación excesiva, 2026-09-10 noche
+- Usuario rechazó techo=7500/interiores=550/relleno=3000 por blanco excesivo. Reducidos mediante CodeFizz a 2800/180/250, 5800K e indirecta=1; 27 escrituras correctas y nivel guardado. Pendiente aprobación visual.
+- `spawn_actors_batch` no creó RectLight (12 fallos); usar `spawn_actor_by_class /Script/Engine.RectLight`. Reparados los 12 mediante este comando.
+- `DefaultWhiteGrid` es Texture2D, no material; sustituido por material emisivo propio M_CQB_R26_Lamp compilado sin errores.
+
 Registro técnico de errores ya investigados. Consultar este archivo antes de intentar arreglar un bug para evitar repetir soluciones fallidas.
 
 ## Formato para cada registro

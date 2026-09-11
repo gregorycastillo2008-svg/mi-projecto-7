@@ -381,5 +381,14 @@
       "validation": "BP_Player compilado 0 errores/0 advertencias; ambos valores releídos y asset guardado."
     }
   ],
-  "last_updated": "2026-09-10T12:15:59-04:00"
+  "cqb_reference_rebuild_20260910": {
+    "status": "pendiente_aprobacion_visual",
+    "asset": "/Game/Maps/CQB_Wood_Houses",
+    "backup": "/Game/Maps/CQB_Wood_Houses_Backup_20260910_Reference",
+    "change": "Reconstruccion via CFA: seis casas iguales de 12x10m, dos plantas (piso superior z302cm), pasillos, puertas, ventanas, barandillas, siete puentes y cuatro escaleras; almacén 76.8x95m. Reemplazados 539 actores anteriores. Prefijo nuevo CQB_R26_. Materiales independientes M_CQB_R26_PaleOSB, Frame, Lamp; concreto anterior conservado.",
+    "lighting": "12 RectLights techo Intensity=2800; 12 interiores=180; 3 CeilingFill=250; Temperature=5800, IndirectLightingIntensity=1. Usuario rechazo la version 7500/550/3000 por demasiado blanca; no restaurar esos valores.",
+    "validation": "Mapa guardado; tres materiales compilan sin errores, 217/189/188 instrucciones pixel; 27 ajustes de luces exitosos. Distribucion aproximada de fotos, no plano exacto. Recorrido jugable completo pendiente.",
+    "recipe": "C:/Users/grego/Documents/Codex/2026-09-08/co/build_cqb_reference.cjs y cqb_*.json/cjs; no ejecutar de nuevo sin limpiar su prefijo. Usar CFA exclusivamente para mutaciones UE."
+  },
+  "last_updated": "2026-09-10T23:15:00-04:00"
 }
